@@ -1,4 +1,5 @@
 workflows:
+<<<<<<< HEAD
   ios-demo-build:
     name: iOS Flutter Demo Build
     instance_type: mac_mini_m1
@@ -29,3 +30,28 @@ workflows:
       email:
         recipients:
           - your-email@example.com
+=======
+  ios-unsigned-workflow:
+    name: iOS Unsigned Free Sideload Build
+    instance_type: mac_mini_m1
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      xcode: latest
+    triggering:
+      events:
+        - push
+        scripts:
+      - name: Set up Flutter dependencies
+        script: |
+          flutter packages pub get
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+      - name: Build Unsigned iOS App
+        script: |
+          flutter build ios --debug --no-codesign
+    artifacts:
+      # This saves the raw un-compiled application bundle for packaging
+      - build/ios/iphoneos/Runner.app
+>>>>>>> dea2761f39592b41909acac3dcb205c387c6ef68
