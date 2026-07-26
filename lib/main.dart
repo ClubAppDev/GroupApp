@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +12,7 @@ import 'services/chat_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'components/unity_logo.dart';
+import 'components/skeleton_loader.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -135,25 +138,84 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   final ChatService _chatService = ChatService();
 
-  // True until the reveal animation has played for the current session, so we
-  // only split-reveal on an actual login transition (not on every rebuild).
-  bool _revealPending = false;
   bool _wasLoggedIn = false;
+
+  // False until the login reveal has finished for this session. The overlay is
+  // a permanent Stack sibling; once this flips true it renders as a no-op (we
+  // never remove it from the tree — that teardown caused a 1-frame flash).
+  bool _playedReveal = false;
+
+  // Cached per login so rebuilds reuse the SAME Future/landing widget instead
+  // of recreating them every frame — recreating them made the skeleton flicker.
+  Future<bool>? _adminCheck;
+  Widget? _landing;
+
+  // The reveal holds until this flips true, so the split never exposes a
+  // skeleton. It becomes true once the admin check AND the first groups
+  // snapshot have arrived.
+  final ValueNotifier<bool> _appReady = ValueNotifier<bool>(false);
+  StreamSubscription<QuerySnapshot>? _groupsSub;
+  bool _adminDone = false;
+  bool _groupsDone = false;
+
+  void _armReadyTracking() {
+    _adminDone = false;
+    _groupsDone = false;
+    _appReady.value = false;
+
+    _adminCheck!.whenComplete(() {
+      _adminDone = true;
+      _updateReady();
+    });
+
+    _groupsSub?.cancel();
+    _groupsSub = _chatService.getUserGroups().listen((_) {
+      _groupsDone = true;
+      _updateReady();
+    }, onError: (_) {
+      _groupsDone = true;
+      _updateReady();
+    });
+  }
+
+  void _updateReady() {
+    if (_adminDone && _groupsDone) _appReady.value = true;
+  }
+
+  @override
+  void dispose() {
+    _groupsSub?.cancel();
+    _appReady.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.idTokenChanges(),
+      // authStateChanges fires only on actual sign-in/out — NOT on periodic
+      // token refreshes. idTokenChanges was rebuilding this whole tree (and the
+      // NeonBackground) on every token tick right after login, flashing the bg.
+      stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const UnityLoadingScreen();
+          return const SkeletonScreen();
         }
 
         final loggedIn = snapshot.hasData;
 
-        // Detect the logged-out -> logged-in transition to arm the reveal.
+        // Detect the logged-out -> logged-in transition.
         if (loggedIn && !_wasLoggedIn) {
-          _revealPending = true;
+          _playedReveal = false; // arm the reveal for this fresh login
+          _adminCheck = _chatService.isCurrentUserSchoolAdmin(); // once
+          _landing = null; // rebuild landing with the fresh check
+          _armReadyTracking(); // start watching for "app loaded"
+        }
+        if (!loggedIn) {
+          _playedReveal = false;
+          _adminCheck = null;
+          _landing = null;
+          _groupsSub?.cancel();
+          _appReady.value = false;
         }
         _wasLoggedIn = loggedIn;
 
@@ -161,28 +223,53 @@ class _AuthGateState extends State<_AuthGate> {
           return const AuthPage();
         }
 
-        final landing = _postAuthLanding();
+        // Build the landing exactly once and reuse it across rebuilds.
+        _landing ??= _buildLanding();
 
-        if (_revealPending) {
-          _revealPending = false;
-          return UnityRevealOverlay(child: landing);
-        }
-        return landing;
+        // The landing ALWAYS sits at this fixed position in the tree (never
+        // rebuilt/re-subscribed). The reveal overlay is a PERMANENT sibling on
+        // top — it renders itself as a zero-size no-op once finished, and we do
+        // NOT remove it from the Stack. Removing it (tearing down its Opacity/
+        // compositing layer) in the same frame the app becomes visible caused a
+        // one-frame flash at the handoff. Keeping it avoids that entirely.
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _landing!,
+            if (_playedReveal)
+              const SizedBox.shrink()
+            else
+              UnityRevealOverlay(
+                key: const ValueKey('login-reveal'),
+                ready: _appReady,
+                onDone: () {
+                  // Defer the state flip so the overlay's final fully-transparent
+                  // frame has already painted before we swap it for a no-op.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _playedReveal = true);
+                  });
+                },
+              ),
+          ],
+        );
       },
     );
   }
 
-  Widget _postAuthLanding() {
+  Widget _buildLanding() {
     return FutureBuilder<bool>(
-      future: _chatService.isCurrentUserSchoolAdmin(),
+      future: _adminCheck ??= _chatService.isCurrentUserSchoolAdmin(),
       builder: (context, adminSnapshot) {
+        // Show the real landing page immediately after login so the reveal can
+        // transition smoothly without a blank flash. Admins still switch to the
+        // dashboard once the check resolves.
         if (adminSnapshot.connectionState == ConnectionState.waiting) {
-          return const UnityLoadingScreen();
+          return const HomePage();
         }
-        if (adminSnapshot.data == true) {
-          return AdminDashboardPage();
+        if (adminSnapshot.hasError || adminSnapshot.data != true) {
+          return const HomePage();
         }
-        return const HomePage();
+        return AdminDashboardPage();
       },
     );
   }

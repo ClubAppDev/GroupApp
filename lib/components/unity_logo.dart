@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:login_ui/theme/app_theme.dart';
 
@@ -114,173 +115,153 @@ class _UnityPainter extends CustomPainter {
       oldDelegate.assembly != assembly || oldDelegate.explode != explode;
 }
 
-/// The animated Unity loading mark (no Scaffold/background) — shards assemble,
-/// then gently drift + pulse. Drop it wherever a spinner would go for a
-/// full-view loading state (it centers itself).
-class UnityLoadingIndicator extends StatefulWidget {
-  final double size;
-  const UnityLoadingIndicator({super.key, this.size = 120});
-
-  @override
-  State<UnityLoadingIndicator> createState() => _UnityLoadingIndicatorState();
-}
-
-class _UnityLoadingIndicatorState extends State<UnityLoadingIndicator>
-    with TickerProviderStateMixin {
-  // Assembles the shards once (0 -> 1), then holds.
-  late final AnimationController _assemble = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 400),
-  )..forward();
-
-  // Continuous slow rotation + breathing pulse.
-  late final AnimationController _idle = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 4),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _assemble.dispose();
-    _idle.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: AnimatedBuilder(
-        animation: Listenable.merge([_assemble, _idle]),
-        builder: (context, _) {
-          final a = Curves.easeOutBack.transform(_assemble.value.clamp(0, 1));
-          final pulse = 1 + 0.05 * math.sin(_idle.value * 2 * math.pi);
-          final rotate = _idle.value * 2 * math.pi;
-          return Transform.rotate(
-            angle: rotate * 0.15, // subtle drift
-            child: Transform.scale(
-              scale: pulse,
-              child: UnityLogo(
-                size: widget.size,
-                assembly: a.clamp(0.0, 1.0),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Full-screen loading screen: the Unity mark on the app wallpaper. Use for
-/// whole-page loading states (its own Scaffold + background).
-class UnityLoadingScreen extends StatelessWidget {
-  const UnityLoadingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Colors.transparent,
-      body: NeonBackground(
-        child: UnityLoadingIndicator(size: 140),
-      ),
-    );
-  }
-}
-
-/// Plays once after login: shows the assembled Unity logo, holds a beat, then
-/// splits the shards apart to reveal [child] (the app) fading in behind.
+/// Plays once after login: an OVERLAY that spins the Unity logo on a solid
+/// backdrop (hiding the app while it loads), then splits the shards apart.
+///
+/// This renders ONLY the logo + backdrop — stack it ON TOP of the real app so
+/// the app never structurally moves in the tree (which would rebuild it and
+/// cause a flicker). The split does NOT start until [ready] is true, with a
+/// [maxWait] cap. Calls [onDone] when finished so the parent can remove it.
 class UnityRevealOverlay extends StatefulWidget {
-  final Widget child;
-  const UnityRevealOverlay({super.key, required this.child});
+  /// Flips to true when the app content behind the overlay is loaded. The split
+  /// waits for this (up to [maxWait]) so real content is shown, not a skeleton.
+  final ValueListenable<bool>? ready;
+
+  /// Hard cap on how long to hold before splitting even if [ready] never fires.
+  final Duration maxWait;
+
+  /// Called once when the reveal animation finishes.
+  final VoidCallback? onDone;
+
+  const UnityRevealOverlay({
+    super.key,
+    this.ready,
+    this.maxWait = const Duration(seconds: 6),
+    this.onDone,
+  });
 
   @override
   State<UnityRevealOverlay> createState() => _UnityRevealOverlayState();
 }
 
 class _UnityRevealOverlayState extends State<UnityRevealOverlay>
-    with TickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
+    with SingleTickerProviderStateMixin {
+  static const Duration _minSpin = Duration(milliseconds: 1800);
+  // Extra grace period spun AFTER the app reports ready — keeps the opaque
+  // backdrop up a bit longer so the content fully settles before it's revealed
+  // (covers any brief post-load flicker).
+  static const Duration _readyGrace = Duration(milliseconds: 500);
+
+  // Continuous spin controller (loops). We switch it to the one-shot split when
+  // the app behind is ready AND the minimum time has elapsed.
+  late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 500),
+    duration: const Duration(milliseconds: 1000), // one spin loop = 1s
   );
 
+  final Stopwatch _elapsed = Stopwatch()..start();
+  bool _splitting = false; // true once the explode has begun
   bool _done = false;
+  double _spinAtSplit = 0; // spin angle frozen when the split starts
+  Stopwatch? _readySince; // starts when the app first reports ready
 
   @override
   void initState() {
     super.initState();
-    _controller.forward();
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        setState(() => _done = true);
-      }
-    });
+    _c.addStatusListener(_onStatus);
+    _c.repeat(); // spin forever until we trigger the split
+    widget.ready?.addListener(_maybeSplit);
+    // Also poll, so "min time reached after ready" is handled.
+    _tick();
+  }
+
+  void _tick() {
+    if (!mounted || _splitting) return;
+    _maybeSplit();
+    if (!_splitting) {
+      Future.delayed(const Duration(milliseconds: 60), _tick);
+    }
+  }
+
+  void _maybeSplit() {
+    if (_splitting || !mounted) return;
+    final ready = widget.ready?.value ?? true;
+
+    // Once ready, start (or keep) the grace clock. Only split after the grace
+    // period AND the overall minimum spin time have both elapsed.
+    if (ready) {
+      _readySince ??= Stopwatch()..start();
+    } else {
+      _readySince = null; // not ready anymore — reset the grace clock
+    }
+
+    final graceDone =
+        _readySince != null && _readySince!.elapsed >= _readyGrace;
+    if (ready && graceDone && _elapsed.elapsed >= _minSpin) {
+      _beginSplit();
+    }
+  }
+
+  void _beginSplit() {
+    if (_splitting || !mounted) return;
+    _splitting = true;
+    _spinAtSplit = _c.value; // freeze rotation here
+    _c.stop();
+    _c
+      ..duration = const Duration(milliseconds: 650)
+      ..value = 0
+      ..forward(); // now _c.value drives the explode 0->1
+    setState(() {});
+  }
+
+  void _onStatus(AnimationStatus s) {
+    if (_splitting && s == AnimationStatus.completed && mounted) {
+      setState(() => _done = true);
+      widget.onDone?.call();
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    widget.ready?.removeListener(_maybeSplit);
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Once finished, drop the overlay entirely so the app is fully interactive.
-    if (_done) return widget.child;
+    // Hard cut when done — no fade/crossfade. The navy stays 100% opaque the
+    // whole animation (shards explode ON it), then this one instant removes the
+    // whole overlay. Because the app behind is already painted, the cut is
+    // flicker-free (there is no intermediate blended frame to flash).
+    if (_done) return const SizedBox.shrink();
 
-    return Stack(
-      children: [
-        // The app fades/scales in behind the logo.
-        AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            // App starts hidden, fades in during the second half (the split).
-            final t = _controller.value;
-            final appOpacity = Curves.easeIn.transform(
-              ((t - 0.45) / 0.55).clamp(0.0, 1.0),
-            );
-            final appScale = 0.92 + 0.08 * appOpacity;
-            return Opacity(
-              opacity: appOpacity,
-              child: Transform.scale(scale: appScale, child: child),
-            );
-          },
-          child: widget.child,
-        ),
-        // The Unity logo overlay: holds, then splits apart + fades.
-        AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            final t = _controller.value;
-            // Phase 1 (0..0.45): logo sits assembled, gently pulsing.
-            // Phase 2 (0.45..1): shards explode outward and fade.
-            final explode = t < 0.45
-                ? 0.0
-                : Curves.easeInCubic.transform((t - 0.45) / 0.55);
-            final pulse = t < 0.45 ? 1 + 0.04 * math.sin(t * 12) : 1.0;
-
-            return IgnorePointer(
-              ignoring: t > 0.45,
-              child: Container(
-                // Solid navy backdrop that itself fades as the split completes.
-                color: AppColors.navy.withValues(
-                  alpha: (1 - (explode * 1.4)).clamp(0.0, 1.0),
-                ),
-                child: Center(
-                  child: Transform.scale(
-                    scale: pulse.toDouble(),
-                    child: UnityLogo(
-                      size: 160,
-                      assembly: 1,
-                      explode: explode,
-                    ),
+    return IgnorePointer(
+      // Solid navy fills the screen the ENTIRE time — never translucent, so the
+      // app is never partially visible through it during the animation.
+      child: ColoredBox(
+        color: AppColors.navy,
+        child: RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: _c,
+            builder: (context, _) {
+              final spin = (_splitting ? _spinAtSplit : _c.value) * 2 * math.pi;
+              final split = _splitting ? _c.value : 0.0;
+              final explode = Curves.easeInCubic.transform(split);
+              return Center(
+                child: Transform.rotate(
+                  angle: spin,
+                  child: UnityLogo(
+                    size: 160,
+                    assembly: 1,
+                    explode: explode,
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ],
+      ),
     );
   }
 }

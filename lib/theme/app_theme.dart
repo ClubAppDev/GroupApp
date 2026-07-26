@@ -106,7 +106,11 @@ class NeonBackground extends StatelessWidget {
           left: -80,
           child: _circle(circleBottom, 300),
         ),
-        child,
+        // Positioned.fill gives the page content TIGHT, bounded constraints.
+        // Without it, a bare Stack child gets loose/unbounded height — which
+        // makes a ListView (e.g. the skeleton loader) thrash/flicker and can
+        // overflow-crash a Column-with-Expanded (the chat screens).
+        Positioned.fill(child: child),
       ],
     );
   }

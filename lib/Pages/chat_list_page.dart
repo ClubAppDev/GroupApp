@@ -10,7 +10,7 @@ import 'package:login_ui/Pages/support_chat_page.dart';
 import 'package:login_ui/components/jarvis_avatar.dart';
 import 'package:login_ui/data/interests_catalog.dart';
 import 'package:login_ui/theme/app_theme.dart';
-import 'package:login_ui/components/unity_logo.dart';
+import 'package:login_ui/components/skeleton_loader.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -480,7 +480,7 @@ class _ChatListPageState extends State<ChatListPage> {
             builder: (context, groupSnapshot) {
               if (dmSnapshot.connectionState == ConnectionState.waiting ||
                   groupSnapshot.connectionState == ConnectionState.waiting) {
-                return const UnityLoadingIndicator();
+                return const SkeletonList();
               }
 
               if (dmSnapshot.hasError) {

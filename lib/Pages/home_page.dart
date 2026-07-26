@@ -37,6 +37,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ChatService _chatService = ChatService();
+  // Cache the stream ONCE. Calling getUserGroups() inside build() created a new
+  // stream every rebuild → StreamBuilder re-subscribed → content blanked to
+  // 'waiting' → flicker. Created once here, it stays subscribed.
+  late final Stream<QuerySnapshot> _groupsStream = _chatService.getUserGroups();
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   int _selectedIndex = 0;
@@ -392,6 +396,327 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Widget _buildHomeBody({
+    required List<QueryDocumentSnapshot> groupDocs,
+    required bool isInitialLoading,
+  }) {
+    final showNotifications = _selectedIndex != 2;
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              if (showNotifications)
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Notifications',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        if (_isLoadingNotifications)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: LinearProgressIndicator(minHeight: 2),
+                          ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: _notifications.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'No new notifications',
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: _notifications.length,
+                                  separatorBuilder: (context, index) =>
+                                      const Divider(height: 12),
+                                  itemBuilder: (context, index) {
+                                    final item = _notifications[index];
+                                    final subtitle =
+                                        _formatNotificationSubtitle(item);
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        _formatNotificationTitle(item),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _formatNotificationBody(item),
+                                            style: TextStyle(
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          if (subtitle.isNotEmpty)
+                                            Text(
+                                              subtitle,
+                                              style: TextStyle(
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      trailing: const Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 14,
+                                        color: Colors.grey,
+                                      ),
+                                      onTap: () => _openNotification(item),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              Expanded(
+                flex: showNotifications ? 4 : 5,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'Calendar',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.tune),
+                              tooltip: 'Calendar settings',
+                              onPressed: groupDocs.isEmpty
+                                  ? null
+                                  : () => _showCalendarFilterDialog(groupDocs),
+                            ),
+                          ],
+                        ),
+                        if (_isLoadingEvents)
+                          const LinearProgressIndicator(minHeight: 2),
+                        TableCalendar(
+                          firstDay: DateTime.utc(2020, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay,
+                          selectedDayPredicate: (day) =>
+                              isSameDay(_selectedDay, day),
+                          eventLoader: _getEventsForDay,
+                          onDaySelected: (selectedDay, focusedDay) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+                          },
+                          calendarStyle: CalendarStyle(
+                            selectedDecoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            todayDecoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.secondary,
+                              shape: BoxShape.circle,
+                            ),
+                            markerDecoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          headerStyle: const HeaderStyle(
+                            formatButtonVisible: false,
+                            titleCentered: true,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedDay != null
+                                    ? 'Events for ${_selectedDay!.month}/${_selectedDay!.day}/${_selectedDay!.year}'
+                                    : 'No date selected',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              if (_selectedDay != null &&
+                                  _getEventsForDay(_selectedDay!).isNotEmpty)
+                                ..._getEventsForDay(_selectedDay!).map(
+                                  (event) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '• ${event.title}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                        Text(
+                                          event.groupName,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        if (event.description.isNotEmpty)
+                                          Text(
+                                            event.description,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'No events scheduled',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              Expanded(
+                flex: showNotifications ? 3 : 4,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Announcements',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _announcements.length,
+                          itemBuilder: (context, index) {
+                            final announcement = _announcements[index];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          announcement['title']!,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${announcement['from']} • ${announcement['time']}',
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isInitialLoading)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -415,330 +740,24 @@ class _HomePageState extends State<HomePage> {
       ),
       body: NeonBackground(
         child: StreamBuilder<QuerySnapshot>(
-        stream: _chatService.getUserGroups(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const UnityLoadingIndicator();
-          }
+          stream: _groupsStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
+            final groupDocs = snapshot.data?.docs ?? [];
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _syncGroups(groupDocs);
+              }
+            });
 
-          final groupDocs = snapshot.data?.docs ?? [];
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _syncGroups(groupDocs);
-          });
-
-          final showNotifications = _selectedIndex != 2;
-
-          return SafeArea(
-            child: Column(
-              children: [
-                if (showNotifications)
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Notifications',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          if (_isLoadingNotifications)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: LinearProgressIndicator(minHeight: 2),
-                            ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: _notifications.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      'No new notifications',
-                                      style: TextStyle(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  )
-                                : ListView.separated(
-                                    itemCount: _notifications.length,
-                                    separatorBuilder: (context, index) =>
-                                        const Divider(height: 12),
-                                    itemBuilder: (context, index) {
-                                      final item = _notifications[index];
-                                      final subtitle =
-                                          _formatNotificationSubtitle(item);
-                                      return ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: Text(
-                                          _formatNotificationTitle(item),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        subtitle: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _formatNotificationBody(item),
-                                              style: TextStyle(
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            if (subtitle.isNotEmpty)
-                                              Text(
-                                                subtitle,
-                                                style: TextStyle(
-                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        trailing: const Icon(
-                                          Icons.arrow_forward_ios,
-                                          size: 14,
-                                          color: Colors.grey,
-                                        ),
-                                        onTap: () => _openNotification(item),
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // Calendar section
-                Expanded(
-                  flex: showNotifications ? 4 : 5,
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'Calendar',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.tune),
-                                tooltip: 'Calendar settings',
-                                onPressed: groupDocs.isEmpty
-                                    ? null
-                                    : () =>
-                                          _showCalendarFilterDialog(groupDocs),
-                              ),
-                            ],
-                          ),
-                          if (_isLoadingEvents)
-                            const LinearProgressIndicator(minHeight: 2),
-                          TableCalendar(
-                            firstDay: DateTime.utc(2020, 1, 1),
-                            lastDay: DateTime.utc(2030, 12, 31),
-                            focusedDay: _focusedDay,
-                            selectedDayPredicate: (day) =>
-                                isSameDay(_selectedDay, day),
-                            eventLoader: _getEventsForDay,
-                            onDaySelected: (selectedDay, focusedDay) {
-                              setState(() {
-                                _selectedDay = selectedDay;
-                                _focusedDay = focusedDay;
-                              });
-                            },
-                            calendarStyle: CalendarStyle(
-                              selectedDecoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              todayDecoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.secondary,
-                                shape: BoxShape.circle,
-                              ),
-                              markerDecoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            headerStyle: const HeaderStyle(
-                              formatButtonVisible: false,
-                              titleCentered: true,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          // Display events for selected day
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _selectedDay != null
-                                      ? 'Events for ${_selectedDay!.month}/${_selectedDay!.day}/${_selectedDay!.year}'
-                                      : 'No date selected',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                if (_selectedDay != null &&
-                                    _getEventsForDay(_selectedDay!).isNotEmpty)
-                                  ..._getEventsForDay(_selectedDay!).map(
-                                    (event) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '• ${event.title}',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Theme.of(context).colorScheme.onSurface,
-                                            ),
-                                          ),
-                                          Text(
-                                            event.groupName,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                          if (event.description.isNotEmpty)
-                                            Text(
-                                              event.description,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Text(
-                                    'No events scheduled',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Bottom half - Announcements
-                Expanded(
-                  flex: showNotifications ? 3 : 4,
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Announcements',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: _announcements.length,
-                            itemBuilder: (context, index) {
-                              final announcement = _announcements[index];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            announcement['title']!,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${announcement['from']} • ${announcement['time']}',
-                                            style: TextStyle(
-                                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+            return _buildHomeBody(
+              groupDocs: groupDocs,
+              isInitialLoading: snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData,
+            );
+          },
         ),
       ),
       bottomNavigationBar: Container(

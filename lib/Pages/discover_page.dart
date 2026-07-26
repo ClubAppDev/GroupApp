@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/Pages/chat_room_page.dart';
 import 'package:login_ui/theme/app_theme.dart';
-import 'package:login_ui/components/unity_logo.dart';
+import 'package:login_ui/components/skeleton_loader.dart';
 
 // ── Placeholder demo data ──────────────────────────────────────────────────
 class DemoClub {
@@ -138,7 +138,7 @@ class DiscoverPage extends StatelessWidget {
         stream: chatService.getPublicGroups(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const UnityLoadingIndicator();
+            return const SkeletonList();
           }
 
           if (snapshot.hasError) {

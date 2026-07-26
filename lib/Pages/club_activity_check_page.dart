@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:login_ui/services/chat_service.dart';
-import 'package:login_ui/components/unity_logo.dart';
+import 'package:login_ui/components/skeleton_loader.dart';
 
 class ClubActivityCheckPage extends StatefulWidget {
   const ClubActivityCheckPage({super.key});
@@ -207,7 +207,7 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
         stream: _chatService.getAllGroupsForAdmin(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const UnityLoadingIndicator();
+            return const SkeletonList();
           }
 
           if (snapshot.hasError) {

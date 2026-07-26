@@ -13,7 +13,7 @@ import 'package:login_ui/data/interests_catalog.dart';
 import 'package:login_ui/services/ai_service.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/theme/app_theme.dart';
-import 'package:login_ui/components/unity_logo.dart';
+import 'package:login_ui/components/skeleton_loader.dart';
 
 class ChatRoomPage extends StatefulWidget {
   final String groupId;
@@ -1423,7 +1423,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     stream: _chatService.getMessages(widget.groupId),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const UnityLoadingIndicator();
+                        return const SkeletonChat();
                       }
                       if (snapshot.hasError) {
                         return Center(child: Text('Error: ${snapshot.error}'));
