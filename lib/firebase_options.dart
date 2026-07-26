@@ -65,7 +65,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'map-app-72943.firebasestorage.app',
     androidClientId: '142461616116-06o57q3fk9micv6sv3688sp1akunf21v.apps.googleusercontent.com',
     iosClientId: '142461616116-njlc2tshfis89goiqvubncn8g8033i43.apps.googleusercontent.com',
-    iosBundleId: 'com.example.loginUi',
+    iosBundleId: 'com.groupapp.ios',
   );
 
 }
