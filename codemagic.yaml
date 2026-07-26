@@ -9,13 +9,15 @@ workflows:
     triggering:
       events:
         - push
-    scripts:
+        scripts:
       - name: Set up Flutter dependencies
         script: |
           flutter packages pub get
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
       - name: Build Unsigned iOS App
         script: |
-          # The --no-codesign flag prevents Apple account requirements
           flutter build ios --debug --no-codesign
     artifacts:
       # This saves the raw un-compiled application bundle for packaging
