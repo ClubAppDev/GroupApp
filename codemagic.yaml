@@ -45,7 +45,12 @@ workflows:
       - name: Build unsigned iOS IPA
         script: |
           flutter build ipa --release --no-codesign
+          mkdir -p build/artifacts
+          cp build/ios/ipa/*.ipa build/artifacts/
+          cd build/artifacts
+          zip -r GroupApp-unsigned.ipa.zip ./*.ipa
     artifacts:
+      - build/artifacts/*.zip
       - build/ios/ipa/*.ipa
     publishing:
       email:
