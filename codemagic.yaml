@@ -1,0 +1,22 @@
+workflows:
+  ios-unsigned-workflow:
+    name: iOS Unsigned Free Sideload Build
+    instance_type: mac_mini_m1
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      xcode: latest
+    triggering:
+      events:
+        - push
+    scripts:
+      - name: Set up Flutter dependencies
+        script: |
+          flutter packages pub get
+      - name: Build Unsigned iOS App
+        script: |
+          # The --no-codesign flag prevents Apple account requirements
+          flutter build ios --debug --no-codesign
+    artifacts:
+      # This saves the raw un-compiled application bundle for packaging
+      - build/ios/iphoneos/Runner.app
