@@ -42,16 +42,24 @@ workflows:
           cd ios
           pod install
           cd ..
-      - name: Build unsigned iOS IPA
+      - name: Build unsigned iOS app artifact
         script: |
-          flutter build ipa --release --no-codesign
+          set -e
+          flutter build ios --release --no-codesign
           mkdir -p build/artifacts
-          cp build/ios/ipa/*.ipa build/artifacts/
+          if [ -d "build/ios/archive/Runner.xcarchive/Products/Applications" ]; then
+            cp -R "build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" build/artifacts/
+          fi
+          if [ -d "build/ios/iphoneos/Runner.app" ]; then
+            cp -R "build/ios/iphoneos/Runner.app" build/artifacts/
+          fi
+          if [ -d "build/ios/archive/Runner.xcarchive" ]; then
+            cp -R "build/ios/archive/Runner.xcarchive" build/artifacts/
+          fi
           cd build/artifacts
-          zip -r GroupApp-unsigned.ipa.zip ./*.ipa
+          zip -r GroupApp-unsigned.zip . -x "*.DS_Store"
     artifacts:
       - build/artifacts/*.zip
-      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
