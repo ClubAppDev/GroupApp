@@ -189,335 +189,310 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       body: NeonBackground(
         child: _isLoading
-          ? const SkeletonList()
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Profile Picture Section
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _isSaving
-                              ? null
-                              : _pickAndUploadProfilePicture,
-                          child: Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 60,
-                                backgroundColor: Colors.grey[400],
-                                backgroundImage: _profilePictureUrl != null
-                                    ? NetworkImage(_profilePictureUrl!)
-                                    : null,
-                                child: _profilePictureUrl == null
-                                    ? Icon(
-                                        Icons.person,
-                                        size: 60,
-                                        color: Colors.grey[700],
-                                      )
-                                    : null,
-                              ),
-                              if (_isSaving)
-                                Positioned.fill(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Tap to change profile picture',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Display Section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Display',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Dark Mode'),
-                          value: ThemeService.isDark,
-                          onChanged: (value) {
-                            ThemeService.setThemeMode(
-                              value ? ThemeMode.dark : ThemeMode.light,
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // User Info Section
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.tune,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Club Preferences',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Choose fields you are interested in so recommended clubs match your vibe.',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _interests.isEmpty
-                              ? [
-                                  Chip(
-                                    label: const Text('No interests selected yet'),
-                                    backgroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceContainerHighest,
-                                  ),
-                                ]
-                              : _interests
-                                    .map(
-                                      (interest) => Chip(
-                                        label: Text(interest),
-                                        backgroundColor: Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                            .withValues(alpha: 0.12),
-                                      ),
-                                    )
-                                    .toList(),
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: OutlinedButton.icon(
-                            onPressed: _isSaving ? null : _editInterests,
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Edit Preferences'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // User Info Section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Personal Information',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Email (read-only)
-                        TextField(
-                          enabled: false,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: 'Email',
-                            hintText: currentUser?.email ?? '',
-                            hintStyle: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // First Name
-                        TextField(
-                          controller: _firstNameController,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                          decoration: InputDecoration(
-                            labelText: 'First Name',
-                            hintText: 'Enter your first name',
-                            hintStyle: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          textCapitalization: TextCapitalization.words,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Last Name
-                        TextField(
-                          controller: _lastNameController,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                          decoration: InputDecoration(
-                            labelText: 'Last Name',
-                            hintText: 'Enter your last name',
-                            hintStyle: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          textCapitalization: TextCapitalization.words,
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Save Button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isSaving ? null : _saveUserData,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.brass,
-                              foregroundColor: AppColors.navy,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: _isSaving
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.navy,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Save Changes',
-                                    style: TextStyle(
-                                      color: AppColors.navy,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _isSaving
-                                ? null
-                                : _signOut,
-                            icon: const Icon(Icons.logout, color: Colors.red),
-                            label: const Text(
-                              'Sign Out',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            ? const SkeletonList()
+            : _buildProfile(context, currentUser),
       ),
+    );
+  }
+
+  // ── Instagram-style profile ──────────────────────────────────────────────
+
+  String get _displayName {
+    final f = _firstNameController.text.trim();
+    final l = _lastNameController.text.trim();
+    final name = [f, l].where((s) => s.isNotEmpty).join(' ');
+    return name.isEmpty ? 'Your Name' : name;
+  }
+
+  Widget _buildProfile(BuildContext context, User? currentUser) {
+    final cs = Theme.of(context).colorScheme;
+    final handle = (currentUser?.email ?? '').split('@').first;
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        const SizedBox(height: 20),
+        // Header: avatar + stats row (IG style)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _isSaving ? null : _pickAndUploadProfilePicture,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 44,
+                      backgroundColor: cs.surfaceContainerHighest,
+                      backgroundImage: _profilePictureUrl != null
+                          ? NetworkImage(_profilePictureUrl!)
+                          : null,
+                      child: _profilePictureUrl == null
+                          ? Icon(Icons.person, size: 44, color: cs.onSurfaceVariant)
+                          : null,
+                    ),
+                    if (_isSaving)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.brass,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: cs.surface, width: 2),
+                        ),
+                        child: const Icon(Icons.camera_alt,
+                            color: AppColors.navy, size: 15),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _stat(context, _interests.length.toString(), 'Interests'),
+                    _stat(context, 'Member', 'Status'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Name + handle
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _displayName,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
+                ),
+              ),
+              if (handle.isNotEmpty)
+                Text('@$handle',
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Edit profile + Edit interests buttons (IG-style pair)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: _profileButton(
+                  context,
+                  label: 'Edit Profile',
+                  onTap: _isSaving ? null : _openEditProfileSheet,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _profileButton(
+                  context,
+                  label: 'Edit Interests',
+                  onTap: _isSaving ? null : _editInterests,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        // Interests "highlights" row
+        if (_interests.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _interests
+                  .map((i) => Chip(
+                        label: Text(i),
+                        backgroundColor:
+                            AppColors.brass.withValues(alpha: 0.14),
+                        side: BorderSide(
+                            color: AppColors.brass.withValues(alpha: 0.4)),
+                      ))
+                  .toList(),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Divider(color: cs.outlineVariant.withValues(alpha: 0.4), height: 32),
+        // Settings list (IG-style rows)
+        _settingsRow(
+          context,
+          icon: Icons.dark_mode_outlined,
+          label: 'Dark Mode',
+          trailing: Switch(
+            value: ThemeService.isDark,
+            onChanged: (v) => ThemeService.setThemeMode(
+                v ? ThemeMode.dark : ThemeMode.light),
+          ),
+        ),
+        _settingsRow(
+          context,
+          icon: Icons.email_outlined,
+          label: 'Email',
+          subtitle: currentUser?.email ?? '',
+        ),
+        _settingsRow(
+          context,
+          icon: Icons.logout,
+          label: 'Sign Out',
+          danger: true,
+          onTap: _isSaving ? null : _signOut,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _stat(BuildContext context, String value, String label) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Text(value,
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+      ],
+    );
+  }
+
+  Widget _profileButton(BuildContext context,
+      {required String label, VoidCallback? onTap}) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 34,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.onSurface,
+          side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Text(label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _settingsRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool danger = false,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final color = danger ? Colors.red : cs.onSurface;
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: danger ? Colors.red : cs.onSurfaceVariant),
+      title: Text(label,
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.w600, fontSize: 15)),
+      subtitle: subtitle != null && subtitle.isNotEmpty
+          ? Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant))
+          : null,
+      trailing: trailing ??
+          (onTap != null && !danger
+              ? Icon(Icons.chevron_right, color: cs.onSurfaceVariant)
+              : null),
+    );
+  }
+
+  /// IG-style "Edit Profile" bottom sheet for name fields.
+  Future<void> _openEditProfileSheet() async {
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Edit Profile',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _firstNameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'First Name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _lastNameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Last Name'),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          await _saveUserData();
+                          if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                          setState(() {}); // refresh displayed name
+                        },
+                  child: const Text('Save Changes'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

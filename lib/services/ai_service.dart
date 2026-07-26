@@ -115,9 +115,9 @@ class AiService {
 
   Future<String> _directGeminiReply(List<AiMessage> history) async {
     if (_apiKey.isEmpty) {
-      return "The demo isn't configured yet. Paste your Gemini API key into "
-          "lib/services/ai_secrets.dart (see ai_secrets.example.dart). "
-          "In the meantime, I can't answer.";
+      return "The AI assistant isn't configured. The Gemini API key is supplied "
+          "at build time via --dart-define=GEMINI_API_KEY=... (set as the "
+          "GEMINI_API_KEY variable in Codemagic). In the meantime, I can't answer.";
     }
 
     // Gemini uses `contents` with role 'user' or 'model' and `parts: [{text}]`.

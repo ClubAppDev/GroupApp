@@ -81,35 +81,52 @@ class NeonBackground extends StatelessWidget {
         ? const Color(0xFF2A4E86).withValues(alpha: 0.22) // deep blue
         : AppColors.navy.withValues(alpha: 0.08);
 
+    // Full physical screen height, ignoring keyboard insets, so the wallpaper
+    // NEVER shifts when the keyboard opens (the body shrinks, the bg stays put).
+    final screenHeight = MediaQuery.sizeOf(context).height;
+
     return Stack(
+      clipBehavior: Clip.hardEdge,
       children: [
+        // Wallpaper layer pinned to the full screen height. OverflowBox lets it
+        // keep its full size even when the Scaffold body shrinks for the keyboard.
         Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: baseGradient,
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+          child: OverflowBox(
+            minHeight: screenHeight,
+            maxHeight: screenHeight,
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              height: screenHeight,
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: baseGradient,
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -90,
+                    right: -70,
+                    child: _circle(circleTop, 260),
+                  ),
+                  Positioned(
+                    bottom: -110,
+                    left: -80,
+                    child: _circle(circleBottom, 300),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-        // Translucent circle, top-right.
-        Positioned(
-          top: -90,
-          right: -70,
-          child: _circle(circleTop, 260),
-        ),
-        // Translucent circle, bottom-left.
-        Positioned(
-          bottom: -110,
-          left: -80,
-          child: _circle(circleBottom, 300),
-        ),
-        // Positioned.fill gives the page content TIGHT, bounded constraints.
-        // Without it, a bare Stack child gets loose/unbounded height — which
-        // makes a ListView (e.g. the skeleton loader) thrash/flicker and can
-        // overflow-crash a Column-with-Expanded (the chat screens).
+        // Page content — tight, bounded constraints (resizes with the keyboard).
         Positioned.fill(child: child),
       ],
     );
