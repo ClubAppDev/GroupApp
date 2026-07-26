@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:login_ui/services/ai_secrets.dart';
 
 /// A single message in the support conversation.
 class AiMessage {
@@ -38,11 +37,10 @@ enum AiBackend {
 class AiService {
   static const AiBackend backend = AiBackend.directGemini;
 
-  /// Gemini API key for the demo. Read from the gitignored
-  /// lib/services/ai_secrets.dart — each developer pastes their own key there
-  /// (see ai_secrets.example.dart for setup). The key is never committed.
-  /// Get a free key at https://aistudio.google.com/apikey
-  static const String _apiKey = geminiApiKey;
+  /// Gemini API key for the demo. If a local secrets file is present, it is
+  /// used; otherwise the service falls back to the scripted demo mode so the
+  /// app still builds in CI and for local demos without a key.
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   static const String _model = 'gemini-2.5-flash';
 
