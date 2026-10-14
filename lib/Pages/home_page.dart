@@ -105,7 +105,8 @@ class _HomePageState extends State<HomePage> {
 
   /// Open the club's Club Day session for the tapped event's club. Admin
   /// status comes from the group's admins list, so only officers get the
-  /// scanner and the open/close controls.
+  /// scanner and the open/close controls. Firestore rules re-check it on
+  /// every write.
   Future<void> _openAttendance(_CalendarEvent event) async {
     if (event.groupId.isEmpty) return;
 
@@ -117,9 +118,13 @@ class _HomePageState extends State<HomePage> {
           .doc(event.groupId)
           .get();
       final data = groupDoc.data();
-      final admins = List<String>.from(data?['admins'] ?? const []);
       isAdmin = email != null &&
-          (admins.contains(email) || data?['createdBy'] == email);
+          data != null &&
+          _chatService.hasGroupPermission(
+            data,
+            email,
+            'manage_check_ins',
+          );
     } catch (_) {
       // Fall through as a non-admin: the roster is still worth showing.
     }

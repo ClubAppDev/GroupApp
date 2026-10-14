@@ -4,12 +4,62 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:math';
 import 'dart:io';
 
+import 'package:login_ui/data/club_roles.dart';
+
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   static const String demoUserEmail = 'demo@groupapp.com';
   static const String _defaultReminderWindow = '24h';
+  static const Set<String> _adminPermissions = {
+    'manage_settings',
+    'manage_events',
+    'manage_messages',
+    'manage_check_ins',
+  };
+
+  bool hasGroupPermission(
+    Map<String, dynamic> groupData,
+    String email,
+    String permission,
+  ) {
+    if (email.isEmpty || email == groupData['createdBy'])
+      return email.isNotEmpty;
+
+    final memberPermissions = groupData['memberPermissions'];
+    if (memberPermissions is Map) {
+      final permissions = memberPermissions[email];
+      return permissions is List && permissions.contains(permission);
+    }
+
+    return List<String>.from(
+      groupData['admins'] ?? const <String>[],
+    ).contains(email);
+  }
+
+  String groupRoleName(Map<String, dynamic> groupData, String email) {
+    if (email == groupData['createdBy']) return 'President';
+
+    final memberRoles = groupData['memberRoles'];
+    final roleId = memberRoles is Map ? memberRoles[email] : null;
+    final roles = groupData['roles'];
+    if (roleId is String && roles is List) {
+      for (final role in roles.whereType<Map>()) {
+        if (role['id'] == roleId && role['name'] is String) {
+          return role['name'] as String;
+        }
+      }
+    }
+
+    if (memberRoles is Map && roleId != null) return 'Member';
+    if (List<String>.from(
+      groupData['admins'] ?? const <String>[],
+    ).contains(email)) {
+      return 'Officer';
+    }
+    return 'Member';
+  }
 
   // Generate a random 6-character join code
   String _generateJoinCode() {
@@ -55,6 +105,17 @@ class ChatService {
       'publicRequestStatus': isPublic ? 'pending' : 'none',
       if (isPublic) 'publicRequestSubmittedAt': FieldValue.serverTimestamp(),
       'admins': [currentUser.email],
+      'roles': ClubRole.builtInRoles.map((role) => role.toMap()).toList(),
+      'memberRoles': {
+        for (final email in members)
+          email: email == currentUser.email ? 'president' : 'member',
+      },
+      'memberPermissions': {
+        for (final email in members)
+          email: email == currentUser.email
+              ? ClubRole.builtInRoles.first.permissions.toList()
+              : <String>[],
+      },
       'whoCanPost': whoCanPost,
       'themeColor': themeColor,
       'themeIcon': themeIcon,
@@ -126,13 +187,21 @@ class ChatService {
     final groupData = groupDoc.data();
     if (groupData != null) {
       final whoCanPost = groupData['whoCanPost'] ?? 'all';
-      final admins = List<String>.from(groupData['admins'] ?? []);
-      final createdBy = groupData['createdBy'] ?? '';
-      final isAdmin =
-          admins.contains(currentUser.email) ||
-          (createdBy == currentUser.email);
-      if (whoCanPost == 'admins' && !isAdmin) {
-        throw Exception('Only admins can send messages');
+      if (whoCanPost == 'admins' &&
+          !hasGroupPermission(
+            groupData,
+            currentUser.email ?? '',
+            'send_messages',
+          )) {
+        throw Exception('You do not have permission to post in this group');
+      }
+      if (type == 'announcement' &&
+          !hasGroupPermission(
+            groupData,
+            currentUser.email ?? '',
+            'post_announcements',
+          )) {
+        throw Exception('You do not have permission to post announcements');
       }
     }
 
@@ -373,7 +442,9 @@ class ChatService {
       'publicRequestStatus': approve ? 'approved' : 'rejected',
       'publicReviewedAt': FieldValue.serverTimestamp(),
       'publicReviewedBy': currentUser.email,
-      'publicRejectionReason': approve ? FieldValue.delete() : (rejectionReason ?? 'Needs review'),
+      'publicRejectionReason': approve
+          ? FieldValue.delete()
+          : (rejectionReason ?? 'Needs review'),
     });
   }
 
@@ -432,17 +503,65 @@ class ChatService {
       final data = doc.data();
       final name = (data['name'] ?? '').toString().toLowerCase();
       final overview = (data['overview'] ?? '').toString().toLowerCase();
-      final keywords = List<String>.from(data['keywords'] ?? const <String>[])
-          .map((value) => value.toLowerCase())
-          .toList();
-      final keywordMatch = keywords.any((keyword) => keyword.contains(lowerQuery));
-      return name.contains(lowerQuery) || overview.contains(lowerQuery) || keywordMatch;
+      final keywords = List<String>.from(
+        data['keywords'] ?? const <String>[],
+      ).map((value) => value.toLowerCase()).toList();
+      final keywordMatch = keywords.any(
+        (keyword) => keyword.contains(lowerQuery),
+      );
+      return name.contains(lowerQuery) ||
+          overview.contains(lowerQuery) ||
+          keywordMatch;
     }).toList();
   }
 
   // Update group admins
   Future<void> updateGroupAdmins(String groupId, List<String> admins) async {
     await _firestore.collection('groups').doc(groupId).update({
+      'admins': admins,
+    });
+  }
+
+  Future<void> updateGroupRoles(
+    String groupId, {
+    required List<ClubRole> roles,
+    required Map<String, String> memberRoles,
+    required List<String> members,
+    required String ownerEmail,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser?.email != ownerEmail) {
+      throw Exception('Only the club president can manage roles');
+    }
+
+    final roleIds = roles.map((role) => role.id).toSet();
+    if (!ClubRole.builtInRoles.every((role) => roleIds.contains(role.id))) {
+      throw Exception('Built-in club roles cannot be removed');
+    }
+
+    final normalizedAssignments = <String, String>{
+      for (final email in members)
+        email: email == ownerEmail
+            ? 'president'
+            : (roleIds.contains(memberRoles[email])
+                  ? memberRoles[email]!
+                  : 'member'),
+    };
+    final rolesById = {for (final role in roles) role.id: role};
+    final permissionsByMember = <String, List<String>>{
+      for (final entry in normalizedAssignments.entries)
+        entry.key: rolesById[entry.value]!.permissions.toList()..sort(),
+    };
+    final admins = <String>{
+      ownerEmail,
+      for (final entry in permissionsByMember.entries)
+        if (entry.value.any(_adminPermissions.contains)) entry.key,
+    }.toList();
+
+    await _firestore.collection('groups').doc(groupId).update({
+      'roles': roles.map((role) => role.toMap()).toList(),
+      'memberRoles': normalizedAssignments,
+      'memberPermissions': permissionsByMember,
       'admins': admins,
     });
   }
@@ -623,11 +742,7 @@ class ChatService {
       groupId,
       question,
       type: 'poll',
-      poll: {
-        'question': question,
-        'options': pollOptions,
-        'votes': votes,
-      },
+      poll: {'question': question, 'options': pollOptions, 'votes': votes},
     );
   }
 
@@ -664,8 +779,9 @@ class ChatService {
     }
 
     final currentOptionVotes = nextVotes[optionId] ?? <String>[];
-    final hadVote = List<String>.from(rawVotes[optionId] ?? const <String>[])
-        .contains(currentUser.email);
+    final hadVote = List<String>.from(
+      rawVotes[optionId] ?? const <String>[],
+    ).contains(currentUser.email);
     if (!hadVote) {
       currentOptionVotes.add(currentUser.email!);
     }
@@ -762,21 +878,77 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) throw Exception('Not logged in');
 
-    await _firestore
-        .collection('groups')
-        .doc(groupId)
-        .collection('events')
-        .add({
-          'title': title,
-          'description': description,
-          'date': Timestamp.fromDate(date),
-          'createdAt': FieldValue.serverTimestamp(),
-          'createdBy': currentUser.email,
-          'groupId': groupId,
-          'groupName': groupName,
-          // QR check-in stays off until an admin opens it for this event.
-          'checkInEnabled': false,
-        });
+    if (title.trim().isEmpty) throw Exception('Event title is required');
+    final groupRef = _firestore.collection('groups').doc(groupId);
+    final groupSnapshot = await groupRef.get();
+    final groupData = groupSnapshot.data();
+    if (groupData == null ||
+        !hasGroupPermission(
+          groupData,
+          currentUser.email ?? '',
+          'manage_events',
+        )) {
+      throw Exception('You do not have permission to manage events');
+    }
+
+    final eventRef = groupRef.collection('events').doc();
+    final messageRef = groupRef.collection('messages').doc();
+    final eventDate = Timestamp.fromDate(date);
+    final batch = _firestore.batch();
+    batch.set(eventRef, {
+      'title': title.trim(),
+      'description': description.trim(),
+      'date': eventDate,
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdBy': currentUser.email,
+      'groupId': groupId,
+      'groupName': groupName,
+      'checkInEnabled': false,
+    });
+    batch.set(messageRef, {
+      'type': 'event',
+      'text': description.trim(),
+      'title': title.trim(),
+      'eventId': eventRef.id,
+      'eventDate': eventDate,
+      'senderEmail': currentUser.email,
+      'timestamp': FieldValue.serverTimestamp(),
+      'reactions': const <String>[],
+    });
+    await batch.commit();
+  }
+
+  Future<void> postAnnouncement(
+    String groupId, {
+    required String title,
+    required String message,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) throw Exception('Not logged in');
+    if (title.trim().isEmpty || message.trim().isEmpty) {
+      throw Exception('Add a title and announcement before posting');
+    }
+
+    final groupRef = _firestore.collection('groups').doc(groupId);
+    final groupSnapshot = await groupRef.get();
+    final groupData = groupSnapshot.data();
+    if (groupData == null ||
+        !hasGroupPermission(
+          groupData,
+          currentUser.email ?? '',
+          'post_announcements',
+        )) {
+      throw Exception('You do not have permission to post announcements');
+    }
+
+    await groupRef.collection('messages').add({
+      'type': 'announcement',
+      'title': title.trim(),
+      'text': message.trim(),
+      'senderEmail': currentUser.email,
+      'timestamp': FieldValue.serverTimestamp(),
+      'reactions': const <String>[],
+    });
   }
 
   // Open or close QR check-in for an event. These bounds are advisory on the
