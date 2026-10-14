@@ -774,7 +774,65 @@ class ChatService {
           'createdBy': currentUser.email,
           'groupId': groupId,
           'groupName': groupName,
+          // QR check-in stays off until an admin opens it for this event.
+          'checkInEnabled': false,
         });
+  }
+
+  // Open or close QR check-in for an event. These bounds are advisory on the
+  // client; checkInMember re-checks them against server time.
+  Future<void> setEventCheckIn(
+    String groupId,
+    String eventId, {
+    required bool enabled,
+    DateTime? opensAt,
+    DateTime? closesAt,
+  }) async {
+    final updates = <String, dynamic>{'checkInEnabled': enabled};
+    if (opensAt != null) {
+      updates['checkInOpensAt'] = Timestamp.fromDate(opensAt);
+    }
+    if (closesAt != null) {
+      updates['checkInClosesAt'] = Timestamp.fromDate(closesAt);
+    }
+    await _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
+        .doc(eventId)
+        .update(updates);
+  }
+
+  Stream<QuerySnapshot> watchEventCheckIns(String groupId, String eventId) {
+    return _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
+        .doc(eventId)
+        .collection('checkIns')
+        .orderBy('checkedInAt', descending: true)
+        .snapshots();
+  }
+
+  // Group members with no check-in yet, for the manual-add list.
+  Future<List<String>> getUncheckedMembers(
+    String groupId,
+    String eventId,
+  ) async {
+    final groupDoc = await _firestore.collection('groups').doc(groupId).get();
+    final members = List<String>.from(groupDoc.data()?['members'] ?? []);
+    final checkIns = await _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
+        .doc(eventId)
+        .collection('checkIns')
+        .get();
+    const emptyEmail = '';
+    final present = checkIns.docs
+        .map((d) => (d.data()['email'] as String?) ?? emptyEmail)
+        .toSet();
+    return members.where((m) => !present.contains(m)).toList()..sort();
   }
 
   Future<List<Map<String, dynamic>>> getGroupEvents(String groupId) async {

@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
 
+// Gitignored; CI writes it from $GEMINI_API_KEY, and locally you paste your
+// own key into it. ai_secrets.example.dart is the committed template.
+import 'ai_secrets.dart';
+
 /// A single message in the support conversation.
 class AiMessage {
   final String role; // 'user' or 'assistant'
@@ -37,10 +41,18 @@ enum AiBackend {
 class AiService {
   static const AiBackend backend = AiBackend.directGemini;
 
-  /// Gemini API key for the demo. If a local secrets file is present, it is
-  /// used; otherwise the service falls back to the scripted demo mode so the
-  /// app still builds in CI and for local demos without a key.
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+  /// Build-time override, passed by CI as
+  /// `--dart-define=GEMINI_API_KEY=...`. Empty on an ordinary local build.
+  static const String _definedKey =
+      String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+
+  /// The key actually used. A `--dart-define` wins when one was passed;
+  /// otherwise this falls back to the gitignored `ai_secrets.dart`, so a
+  /// plain `flutter run` works without remembering the flag.
+  ///
+  /// `ai_secrets.dart` is not in git, so CI generates it from the
+  /// GEMINI_API_KEY environment variable before building (see codemagic.yaml).
+  static const String _apiKey = _definedKey == '' ? geminiApiKey : _definedKey;
 
   static const String _model = 'gemini-2.5-flash';
 

@@ -599,7 +599,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           ? 'Hi! Ask me anything after "@jarvis".'
           : await _aiService.askJarvis(question, recentMessages: chatContext);
       await _chatService.postJarvisMessage(widget.groupId, reply);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Jarvis in-chat reply failed: $e');
       await _chatService.postJarvisMessage(
         widget.groupId,
         'Sorry, I could not answer that right now. Please try again.',

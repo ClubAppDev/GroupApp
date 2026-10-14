@@ -59,6 +59,9 @@ class _SupportChatPageState extends State<SupportChatPage> {
       });
       _scrollToBottom();
     } catch (e) {
+      // The cause was being discarded, which made this impossible to
+      // diagnose from the device. Keep the friendly text, log the reason.
+      debugPrint('AI support chat failed: $e');
       if (!mounted) return;
       setState(() {
         _messages.add(

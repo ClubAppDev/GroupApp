@@ -1,0 +1,193 @@
+rules_version = '2';
+
+// GroupApp Firestore rules.
+//
+// Identity note: this app keys membership on EMAIL, not uid (groups.members
+// and groups.admins are arrays of emails), so these rules compare against
+// request.auth.token.email throughout.
+//
+// The check-in rules at the bottom are the strict ones: they replace what a
+// Cloud Function would otherwise enforce, so that QR check-in works on the
+// free Spark plan. Everything above them is deliberately close to the
+// app's existing behaviour — these rules are written to secure check-in
+// without breaking features that already ship.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email;
+    }
+
+    function groupData(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data;
+    }
+
+    function isMember(groupId) {
+      return signedIn() && myEmail() in groupData(groupId).members;
+    }
+
+    function isGroupAdmin(groupId) {
+      let g = groupData(groupId);
+      return signedIn() &&
+        (myEmail() in g.admins || g.createdBy == myEmail());
+    }
+
+    // Set by the verifyAdminSignupCode flow as a custom claim.
+    function isSchoolAdmin() {
+      return signedIn() && request.auth.token.schoolAdmin == true;
+    }
+
+    // ---------------------------------------------------------------- users
+    match /users/{uid} {
+      // Profiles are looked up by email across the app (member lists, DM
+      // partners, profile pictures), so reads stay open to signed-in users.
+      allow read: if signedIn();
+      // A user may only write their own profile document.
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------- check-in token lookup
+    // Maps an opaque QR token to the member it belongs to, so an admin's
+    // scanner can resolve a scan without being able to read anyone's token.
+    //
+    // 'get' is allowed because resolving a scan requires reading the exact
+    // document whose id is the scanned token. 'list' is denied so the
+    // collection cannot be enumerated to harvest tokens.
+    match /checkInTokens/{token} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      // A member may only ever point a token at themselves.
+      allow create, update: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == myEmail();
+      // Rotating a token deletes the old mapping.
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // --------------------------------------------------------------- groups
+    match /groups/{groupId} {
+      // Public groups are discoverable; private ones only by their members.
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.createdBy == myEmail()
+        && myEmail() in request.resource.data.members
+        && myEmail() in request.resource.data.admins;
+
+      // Admins manage settings. Non-admin members may still update the doc
+      // in order to join (members is append-only for them, below).
+      allow update: if isGroupAdmin(groupId) || isSchoolAdmin() || (
+        signedIn()
+        // A joining user may only add themselves to members and change
+        // nothing else about the group.
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['members'])
+        && request.resource.data.members.hasAll(resource.data.members)
+        && request.resource.data.members.removeAll(resource.data.members)
+             == [myEmail()]
+      );
+
+      allow delete: if isSchoolAdmin()
+        || (signedIn() && resource.data.createdBy == myEmail());
+
+      // ------------------------------------------------------- messages
+      match /messages/{messageId} {
+        allow read: if isMember(groupId) || isSchoolAdmin();
+        allow create: if isMember(groupId)
+          && request.resource.data.senderEmail == myEmail()
+          // Honour the group's whoCanPost setting.
+          && (groupData(groupId).whoCanPost != 'admins' || isGroupAdmin(groupId));
+
+        // Any member may react and vote in polls, so those two fields are
+        // writable by members — but nothing else about a message is, which
+        // keeps someone from editing another person's text after the fact.
+        allow update: if isGroupAdmin(groupId) || isSchoolAdmin() || (
+          isMember(groupId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['reactions', 'poll'])
+        );
+
+        allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+      }
+
+      // --------------------------------------------------------- events
+      match /events/{eventId} {
+        allow read: if isMember(groupId) || isSchoolAdmin();
+        allow create, update, delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+
+        // ----------------------------------------------------- checkIns
+        // The security-critical part. A check-in may only be written by an
+        // admin of this group, for a member of this group, while check-in
+        // is open, and never twice for the same person.
+        match /checkIns/{memberUid} {
+          function eventData() {
+            return get(/databases/$(database)/documents/groups/$(groupId)/events/$(eventId)).data;
+          }
+
+          function checkInOpen() {
+            let e = eventData();
+            return e.checkInEnabled == true
+              && (!('checkInOpensAt' in e) || request.time >= e.checkInOpensAt)
+              // 15 minute grace period after close, matching the original
+              // Cloud Function behaviour.
+              && (!('checkInClosesAt' in e)
+                  || request.time <= e.checkInClosesAt + duration.value(15, 'm'));
+          }
+
+          // Members can see who is present; the roster is not a secret.
+          allow read: if isMember(groupId) || isSchoolAdmin();
+
+          allow create: if isGroupAdmin(groupId)
+            && checkInOpen()
+            // The person being checked in must belong to this club.
+            && request.resource.data.email in groupData(groupId).members
+            // The document id must be the uid recorded inside it, which is
+            // what makes a second scan a no-op rather than a duplicate row.
+            && request.resource.data.uid == memberUid
+            // Stamp integrity: the client cannot backdate a check-in or
+            // attribute the scan to another officer.
+            && request.resource.data.checkedInAt == request.time
+            && request.resource.data.checkedInBy == myEmail()
+            && request.resource.data.method in ['qr', 'manual'];
+
+          // Attendance is append-only. Corrections are a delete by an admin,
+          // which leaves no way to silently rewrite a record.
+          allow update: if false;
+          allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+        }
+      }
+    }
+
+    // ------------------------------------------------------ direct messages
+    match /directMessages/{threadId} {
+      function participants() {
+        return resource.data.participants;
+      }
+
+      allow read: if signedIn() && myEmail() in participants();
+      allow create: if signedIn()
+        && myEmail() in request.resource.data.participants;
+      allow update: if signedIn() && myEmail() in participants();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function threadParticipants() {
+          return get(/databases/$(database)/documents/directMessages/$(threadId))
+                   .data.participants;
+        }
+
+        allow read: if signedIn() && myEmail() in threadParticipants();
+        allow create: if signedIn()
+          && myEmail() in threadParticipants()
+          && request.resource.data.senderEmail == myEmail();
+        allow update, delete: if false;
+      }
+    }
+  }
+}

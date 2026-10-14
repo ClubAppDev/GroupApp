@@ -73,9 +73,11 @@ class AdminDashboardPage extends StatelessWidget {
               const SizedBox(height: 14),
               _AdminActionCard(
                 title: 'Club Approval Requests',
+                // Leads with the action either way: an empty queue is still a
+                // place you go to verify requests, not a dead end.
                 subtitle: pending > 0
-                    ? '$pending club requests are waiting right now.'
-                    : 'No pending requests right now. Demo requests are shown on the next page.',
+                    ? 'Pending requests — verify $pending club ${pending == 1 ? 'request' : 'requests'} waiting for approval.'
+                    : 'Pending requests — verify club requests for public listing.',
                 icon: Icons.approval_outlined,
                 onTap: () {
                   Navigator.push(

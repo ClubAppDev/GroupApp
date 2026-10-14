@@ -8,6 +8,7 @@ import 'package:login_ui/theme/app_theme.dart';
 import 'package:login_ui/components/skeleton_loader.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'my_check_in_code_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -355,6 +356,16 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: Icons.email_outlined,
           label: 'Email',
           subtitle: currentUser?.email ?? '',
+        ),
+        _settingsRow(
+          context,
+          icon: Icons.qr_code_2,
+          label: 'My Check-In Code',
+          subtitle: 'Show this to a club admin at events',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MyCheckInCodePage()),
+          ),
         ),
         _settingsRow(
           context,

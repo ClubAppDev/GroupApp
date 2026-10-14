@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import Anthropic from "@anthropic-ai/sdk";
 import * as admin from "firebase-admin";
+import { randomBytes } from "crypto";
 
 // The Anthropic API key is stored as a Firebase secret, never shipped in the app.
 // Set it once with:  firebase functions:secrets:set ANTHROPIC_API_KEY
@@ -132,5 +133,181 @@ export const verifyAdminSignupCode = onCall(
     );
 
     return { success: true };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// QR check-in
+//
+// The member displays a QR code holding an opaque token; a club admin scans it.
+// The attendance write happens here rather than in the app so that none of the
+// checks below can be bypassed by a modified client.
+// ---------------------------------------------------------------------------
+
+// Late arrivals still get counted for a short window after check-in closes.
+const CHECK_IN_GRACE_MS = 15 * 60 * 1000;
+
+export const checkInMember = onCall(
+  { region: "us-central1", maxInstances: 10 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "You must be signed in.");
+    }
+
+    const callerEmail = request.auth.token.email;
+    if (!callerEmail) {
+      throw new HttpsError("failed-precondition", "Your account has no email.");
+    }
+
+    const groupId = String(request.data?.groupId ?? "").trim();
+    const eventId = String(request.data?.eventId ?? "").trim();
+    const token = String(request.data?.token ?? "").trim();
+    // Manual check-in names the member directly, for a dead or absent phone.
+    // It is admin-only in exactly the same way a scan is.
+    const manualEmail = String(request.data?.memberEmail ?? "")
+      .trim()
+      .toLowerCase();
+    if (!groupId || !eventId || (!token && !manualEmail)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "groupId, eventId and either token or memberEmail are required.",
+      );
+    }
+
+    const db = admin.firestore();
+    const groupRef = db.collection("groups").doc(groupId);
+    const eventRef = groupRef.collection("events").doc(eventId);
+
+    const [groupSnap, eventSnap] = await Promise.all([
+      groupRef.get(),
+      eventRef.get(),
+    ]);
+    if (!groupSnap.exists) throw new HttpsError("not-found", "Group not found.");
+    if (!eventSnap.exists) throw new HttpsError("not-found", "Event not found.");
+
+    const group = groupSnap.data() ?? {};
+    const event = eventSnap.data() ?? {};
+
+    // Only club admins, the group owner, or a school admin may scan.
+    // schoolAdmin is read off the ID token (set by verifyAdminSignupCode), so
+    // it cannot be forged — but it only refreshes when the token does.
+    const admins: string[] = Array.isArray(group.admins) ? group.admins : [];
+    const isClubAdmin =
+      admins.includes(callerEmail) || group.createdBy === callerEmail;
+    const isSchoolAdmin = request.auth.token.schoolAdmin === true;
+    if (!isClubAdmin && !isSchoolAdmin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only club admins can check members in.",
+      );
+    }
+
+    // Window is judged on server time; the client's clock is never trusted.
+    if (event.checkInEnabled !== true) {
+      throw new HttpsError("failed-precondition", "Check-in is not open.");
+    }
+    const now = Date.now();
+    const opensAt: number | undefined = event.checkInOpensAt?.toMillis?.();
+    const closesAt: number | undefined = event.checkInClosesAt?.toMillis?.();
+    if (opensAt && now < opensAt) {
+      throw new HttpsError("failed-precondition", "Check-in hasn't opened yet.");
+    }
+    if (closesAt && now > closesAt + CHECK_IN_GRACE_MS) {
+      throw new HttpsError("failed-precondition", "Check-in has closed.");
+    }
+
+    // Resolve the scanned token, or the named member for a manual entry.
+    const userQuery = token
+      ? await db
+          .collection("users")
+          .where("checkInToken", "==", token)
+          .limit(1)
+          .get()
+      : await db
+          .collection("users")
+          .where("email", "==", manualEmail)
+          .limit(1)
+          .get();
+    if (userQuery.empty) {
+      throw new HttpsError(
+        "not-found",
+        token ? "This code isn't recognized." : "No account for that email.",
+      );
+    }
+    const userDoc = userQuery.docs[0];
+    const user = userDoc.data();
+    const memberEmail: string | undefined = user.email;
+    if (!memberEmail) {
+      throw new HttpsError("failed-precondition", "That account has no email.");
+    }
+
+    // Membership is keyed on email throughout this app, matching groups.members.
+    const members: string[] = Array.isArray(group.members) ? group.members : [];
+    if (!members.includes(memberEmail)) {
+      throw new HttpsError(
+        "permission-denied",
+        "That person is not a member of this club.",
+      );
+    }
+
+    // Doc id is the uid, so a repeat scan can never create a second row. The
+    // transaction keeps the exists-check and the write atomic in case two
+    // officers scan the same person at the same moment.
+    const checkInRef = eventRef.collection("checkIns").doc(userDoc.id);
+    const displayName =
+      [user.firstName, user.lastName].filter(Boolean).join(" ") || memberEmail;
+
+    const alreadyCheckedIn = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(checkInRef);
+      if (existing.exists) return true;
+      tx.set(checkInRef, {
+        uid: userDoc.id,
+        email: memberEmail,
+        displayName,
+        photoUrl: user.profilePicture ?? null,
+        checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
+        checkedInBy: callerEmail,
+        method: token ? "qr" : "manual",
+      });
+      return false;
+    });
+
+    // Identity is returned either way so the scanner screen can show a name
+    // and photo for the officer to check against the person in front of them.
+    return {
+      success: true,
+      alreadyCheckedIn,
+      member: {
+        displayName,
+        email: memberEmail,
+        photoUrl: user.profilePicture ?? null,
+      },
+    };
+  },
+);
+
+export const getCheckInToken = onCall(
+  { region: "us-central1", maxInstances: 10 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "You must be signed in.");
+    }
+
+    const userRef = admin.firestore().collection("users").doc(request.auth.uid);
+    const snap = await userRef.get();
+    const existing: string | undefined = snap.data()?.checkInToken;
+
+    // The token is stable across meetings unless rotation is asked for, so a
+    // member's QR code stays the same image. Rotating invalidates a leaked code.
+    if (existing && request.data?.rotate !== true) {
+      return { token: existing };
+    }
+
+    const token = randomBytes(24).toString("base64url");
+    await userRef.set(
+      { email: request.auth.token.email ?? null, checkInToken: token },
+      { merge: true },
+    );
+    return { token };
   },
 );
