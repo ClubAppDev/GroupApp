@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:login_ui/Pages/direct_message_page.dart';
 import 'package:login_ui/components/jarvis_avatar.dart';
+import 'package:login_ui/Pages/club_day_page.dart';
+import 'package:login_ui/Pages/club_stats_page.dart';
 import 'package:login_ui/data/interests_catalog.dart';
 import 'package:login_ui/services/ai_service.dart';
 import 'package:login_ui/services/chat_service.dart';
@@ -1229,6 +1231,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             ),
             iconTheme: IconThemeData(color: onThemeColor),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.how_to_reg),
+                tooltip: 'Club Day',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ClubDayPage(
+                      groupId: widget.groupId,
+                      groupName: widget.groupName,
+                      isAdmin: isAdmin,
+                    ),
+                  ),
+                ),
+              ),
+              if (isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.insert_chart_outlined),
+                  tooltip: 'Club statistics',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ClubStatsPage(
+                        groupId: widget.groupId,
+                        groupName: widget.groupName,
+                      ),
+                    ),
+                  ),
+                ),
               if (isOwner)
                 IconButton(
                   icon: const Icon(Icons.event_note),

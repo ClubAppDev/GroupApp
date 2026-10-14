@@ -37,8 +37,16 @@ service cloud.firestore {
     }
 
     // Set by the verifyAdminSignupCode flow as a custom claim.
+    // Two sources, because both exist in practice: the custom claim set by
+    // verifyAdminSignupCode, and the users/{uid}.schoolAdmin field that the
+    // app itself falls back to (ChatService.isCurrentUserSchoolAdmin). Only
+    // checking the claim would lock out an admin promoted via the field.
     function isSchoolAdmin() {
-      return signedIn() && request.auth.token.schoolAdmin == true;
+      return signedIn() && (
+        request.auth.token.schoolAdmin == true
+        || get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.get('schoolAdmin', false) == true
+      );
     }
 
     // ---------------------------------------------------------------- users
@@ -158,6 +166,43 @@ service cloud.firestore {
 
           // Attendance is append-only. Corrections are a delete by an admin,
           // which leaves no way to silently rewrite a record.
+          allow update: if false;
+          allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+        }
+      }
+
+      // ------------------------------------------------------- club days
+      // A club day is one dated sign-in session, its id being the date
+      // (2026-10-13), which is what makes "open today" idempotent.
+      match /clubDays/{dateKey} {
+        // Members can see their club's attendance; school admins see any.
+        allow read: if isMember(groupId) || isSchoolAdmin();
+        // Only officers start, reopen or close a club day.
+        allow create, update: if isGroupAdmin(groupId) || isSchoolAdmin();
+        allow delete: if isSchoolAdmin();
+
+        match /checkIns/{memberUid} {
+          function dayIsOpen() {
+            return get(/databases/$(database)/documents/groups/$(groupId)/clubDays/$(dateKey))
+                     .data.isOpen == true;
+          }
+
+          allow read: if isMember(groupId) || isSchoolAdmin();
+
+          // The security-critical rule: a member cannot sign themselves in.
+          // Only a club admin may write a row, only while the day is open,
+          // only for someone who belongs to the club, and only with a
+          // server timestamp and their own name as the scanner.
+          allow create: if isGroupAdmin(groupId)
+            && dayIsOpen()
+            && request.resource.data.email in groupData(groupId).members
+            && request.resource.data.uid == memberUid
+            && request.resource.data.checkedInAt == request.time
+            && request.resource.data.checkedInBy == myEmail()
+            && request.resource.data.method in ['qr', 'manual'];
+
+          // Attendance is append-only. A correction is a delete by an
+          // admin, so a record can never be quietly rewritten.
           allow update: if false;
           allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
         }

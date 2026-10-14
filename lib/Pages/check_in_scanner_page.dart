@@ -6,35 +6,34 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/check_in_service.dart';
 
-/// The admin's side of check-in: scan each member's QR as they arrive.
+/// Camera scanner for member QR codes.
 ///
-/// Every scan is validated server-side by the checkInMember Cloud Function,
-/// so this screen only presents the outcome. It deliberately keeps a manual
-/// entry path: cameras fail, phones die, and officers still need to check
-/// people in.
+/// Deliberately knows nothing about club days or events: the caller supplies
+/// [onScan], which does the actual recording and hands back a result to show.
+/// It also keeps a manual entry path, because cameras fail, phones die, and
+/// people still need signing in.
 class CheckInScannerPage extends StatefulWidget {
   const CheckInScannerPage({
     super.key,
-    required this.groupId,
-    required this.eventId,
-    required this.eventTitle,
+    required this.title,
+    required this.onScan,
   });
 
-  final String groupId;
-  final String eventId;
-  final String eventTitle;
+  final String title;
+
+  /// Called with a scanned (or typed) token. Returns what to show the
+  /// operator. Never throws — a failure is a [CheckInResult] with `ok: false`.
+  final Future<CheckInResult> Function(String token) onScan;
 
   @override
   State<CheckInScannerPage> createState() => _CheckInScannerPageState();
 }
 
 class _CheckInScannerPageState extends State<CheckInScannerPage> {
-  final CheckInService _checkInService = CheckInService();
-
   final MobileScannerController _controller = MobileScannerController(
-    // noDuplicates stops the same code firing continuously while it sits in
-    // frame; we still guard with _busy because the member may legitimately
-    // be rescanned after an error.
+    // noDuplicates stops one code firing repeatedly while it sits in frame;
+    // _busy still guards, since a member may legitimately be rescanned
+    // after an error.
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
   );
@@ -55,11 +54,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
     if (_busy || token.isEmpty) return;
     setState(() => _busy = true);
 
-    final result = await _checkInService.checkIn(
-      groupId: widget.groupId,
-      eventId: widget.eventId,
-      token: token,
-    );
+    final result = await widget.onScan(token);
 
     if (!mounted) return;
     setState(() {
@@ -68,9 +63,8 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
       if (result.ok && !result.alreadyCheckedIn) _successCount++;
     });
 
-    // Hold the result long enough for the officer to read the name and match
-    // it to the person in front of them, then clear so the next scan is
-    // unambiguous.
+    // Hold the result long enough to read the name and match it to the person
+    // standing there, then clear so the next scan is unambiguous.
     _clearBanner?.cancel();
     _clearBanner = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _last = null);
@@ -95,7 +89,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
           autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Check-in code',
-            hintText: 'Paste the code from the member',
+            hintText: "Paste the member's code",
           ),
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
@@ -106,7 +100,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Check in'),
+            child: const Text('Sign in'),
           ),
         ],
       ),
@@ -118,7 +112,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.eventTitle, overflow: TextOverflow.ellipsis),
+        title: Text(widget.title, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             tooltip: 'Toggle torch',
@@ -144,6 +138,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
                   errorBuilder: (context, error, child) =>
                       _cameraUnavailable(error),
                 ),
+                _reticle(),
                 if (_busy)
                   const ColoredBox(
                     color: Colors.black38,
@@ -165,8 +160,25 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
     );
   }
 
-  /// Shown when the camera cannot start — a denied permission, or a device
-  /// with no camera at all. Manual entry keeps the screen usable either way.
+  /// A frame to aim with. Without one the whole screen is live and people do
+  /// not know where to hold the phone.
+  Widget _reticle() {
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          width: 230,
+          height: 230,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white70, width: 2),
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shown when the camera cannot start — denied permission, or no camera.
+  /// Manual entry keeps the screen usable either way.
   Widget _cameraUnavailable(MobileScannerException error) {
     return ColoredBox(
       color: Colors.black,
@@ -180,9 +192,10 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
               const SizedBox(height: 16),
               Text(
                 'Camera unavailable',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                ),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 8),
               Text(
@@ -226,8 +239,8 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            // The photo is the point: the officer compares it to the person
-            // standing there, which is what stops a shared screenshot.
+            // The photo is the point: compare it to the person in front of
+            // you, which is what stops a shared screenshot.
             if (r.ok && r.photoUrl != null && r.photoUrl!.isNotEmpty)
               CircleAvatar(
                 radius: 26,
@@ -252,7 +265,8 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
                   if (r.ok && r.email != null)
                     Text(
                       r.email!,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                 ],
               ),
@@ -273,12 +287,12 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
             const Icon(Icons.how_to_reg, size: 20),
             const SizedBox(width: 8),
             Text(
-              '$_successCount checked in',
+              '$_successCount signed in',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             Text(
-              'Point at a member\'s QR code',
+              "Point at a member's QR code",
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

@@ -5,6 +5,7 @@ import 'package:login_ui/Pages/club_activity_check_page.dart';
 import 'package:login_ui/services/auth_service.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/theme/app_theme.dart';
+import 'all_clubs_stats_page.dart';
 
 class AdminDashboardPage extends StatelessWidget {
   AdminDashboardPage({super.key});
@@ -84,6 +85,21 @@ class AdminDashboardPage extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AdminActivityPage(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _AdminActionCard(
+                title: 'Club Day Attendance',
+                subtitle:
+                    'Sign-in sheets for every club — who showed up, when, and who did not.',
+                icon: Icons.how_to_reg,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllClubsStatsPage(),
                     ),
                   );
                 },

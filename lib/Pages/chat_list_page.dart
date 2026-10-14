@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/Pages/chat_room_page.dart';
 import 'package:login_ui/Pages/direct_message_page.dart';
-import 'package:login_ui/Pages/demo_group_chat_page.dart';
 import 'package:login_ui/Pages/admin_activity_page.dart';
 import 'package:login_ui/Pages/support_chat_page.dart';
 import 'package:login_ui/components/jarvis_avatar.dart';
@@ -437,7 +436,6 @@ class _ChatListPageState extends State<ChatListPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -494,7 +492,7 @@ class _ChatListPageState extends State<ChatListPage> {
               final dmDocs = dmSnapshot.data?.docs ?? [];
               final groupDocs = groupSnapshot.data?.docs ?? [];
 
-              // Always show list (demo group ensures it's never empty)
+              // The list can legitimately be empty before joining a group.
 
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -605,7 +603,7 @@ class _ChatListPageState extends State<ChatListPage> {
                     }),
                     const SizedBox(height: 8),
                   ],
-                  // Always show Group Chats section (demo + real groups)
+                  // Group chats, all of them real Firestore groups.
                   ...[
                     Text(
                       'Group Chats',
@@ -616,49 +614,6 @@ class _ChatListPageState extends State<ChatListPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Demo: App Development Club
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? colorScheme.surfaceContainerHigh
-                            : colorScheme.surface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: Color(0xFF1A237E),
-                          child: Icon(Icons.code, color: Colors.white),
-                        ),
-                        title: Text(
-                          'App Development Club',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '5 members',
-                          style: TextStyle(
-                            color: colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: Icon(
-                          Icons.arrow_forward_ios,
-                          size: 16,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const DemoGroupChatPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                     ...groupDocs.map((group) {
                       final groupData = group.data() as Map<String, dynamic>;
                       final groupName = groupData['name'] ?? 'Unnamed Group';

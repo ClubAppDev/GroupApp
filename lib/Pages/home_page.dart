@@ -14,7 +14,7 @@ import 'package:login_ui/components/interests_picker_dialog.dart';
 import 'package:login_ui/components/unity_logo.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/theme/app_theme.dart';
-import 'attendance_page.dart';
+import 'club_day_page.dart';
 
 class _CalendarEvent {
   final String id;
@@ -103,11 +103,11 @@ class _HomePageState extends State<HomePage> {
     return DateTime.utc(day.year, day.month, day.day);
   }
 
-  /// Open attendance for an event. Admin status is read from the group's
-  /// admins list so that the switch and scanner only show for officers; the
-  /// Cloud Function re-checks it on every write regardless.
+  /// Open the club's Club Day session for the tapped event's club. Admin
+  /// status comes from the group's admins list, so only officers get the
+  /// scanner and the open/close controls.
   Future<void> _openAttendance(_CalendarEvent event) async {
-    if (event.id.isEmpty) return;
+    if (event.groupId.isEmpty) return;
 
     final email = FirebaseAuth.instance.currentUser?.email;
     bool isAdmin = false;
@@ -128,10 +128,9 @@ class _HomePageState extends State<HomePage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AttendancePage(
+        builder: (_) => ClubDayPage(
           groupId: event.groupId,
-          eventId: event.id,
-          eventTitle: event.title,
+          groupName: event.groupName,
           isAdmin: isAdmin,
         ),
       ),
