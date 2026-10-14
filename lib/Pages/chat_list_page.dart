@@ -196,7 +196,7 @@ class _ChatListPageState extends State<ChatListPage> {
                     DropdownMenuItem(value: 'all', child: Text('All members')),
                     DropdownMenuItem(
                       value: 'admins',
-                      child: Text('Admins only'),
+                      child: Text('Members with posting permission'),
                     ),
                   ],
                   onChanged: (value) {

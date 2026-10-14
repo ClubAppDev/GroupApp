@@ -8,8 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:login_ui/Pages/direct_message_page.dart';
+import 'package:login_ui/Pages/group_roles_page.dart';
 import 'package:login_ui/components/jarvis_avatar.dart';
 import 'package:login_ui/data/interests_catalog.dart';
+import 'package:login_ui/data/club_roles.dart';
 import 'package:login_ui/services/ai_service.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/theme/app_theme.dart';
@@ -89,7 +91,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return url;
   }
 
-  List<QueryDocumentSnapshot> _filteredMessages(List<QueryDocumentSnapshot> docs) {
+  List<QueryDocumentSnapshot> _filteredMessages(
+    List<QueryDocumentSnapshot> docs,
+  ) {
     if (_activeThreadRootId == null) return docs;
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
@@ -98,7 +102,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }).toList();
   }
 
-  int _replyCountForMessage(String messageId, List<QueryDocumentSnapshot> docs) {
+  int _replyCountForMessage(
+    String messageId,
+    List<QueryDocumentSnapshot> docs,
+  ) {
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       return data['threadRootId'] == messageId;
@@ -161,16 +168,23 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     });
   }
 
+  Future<void> _closeInputDialog(BuildContext dialogContext) async {
+    FocusScope.of(dialogContext).unfocus();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!dialogContext.mounted) return;
+    Navigator.of(dialogContext).pop();
+  }
+
   Future<void> _showAddEventDialog(String groupName) async {
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
     DateTime selectedDate = DateTime.now();
-    TimeOfDay selectedTime = TimeOfDay.now();
+    TimeOfDay selectedTime = const TimeOfDay(hour: 18, minute: 0);
     bool isSaving = false;
 
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Add Event'),
           content: SingleChildScrollView(
@@ -179,7 +193,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               children: [
                 TextField(
                   controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Event title'),
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Event name',
+                    hintText: 'e.g. Club meeting',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -190,6 +208,29 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ActionChip(
+                        label: const Text('Today'),
+                        onPressed: () => setDialogState(() {
+                          selectedDate = DateTime.now();
+                        }),
+                      ),
+                      ActionChip(
+                        label: const Text('Tomorrow'),
+                        onPressed: () => setDialogState(() {
+                          selectedDate = DateTime.now().add(
+                            const Duration(days: 1),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Date'),
@@ -201,8 +242,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: selectedDate,
-                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(
+                        const Duration(days: 365 * 5),
+                      ),
                     );
                     if (picked != null) {
                       setDialogState(() {
@@ -233,7 +276,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => _closeInputDialog(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
@@ -241,7 +284,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   ? null
                   : () async {
                       final title = titleController.text.trim();
-                      if (title.isEmpty) return;
+                      if (title.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enter an event name to continue.'),
+                          ),
+                        );
+                        return;
+                      }
                       setDialogState(() => isSaving = true);
                       final eventDateTime = DateTime(
                         selectedDate.year,
@@ -258,13 +308,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           descriptionController.text.trim(),
                           eventDateTime,
                         );
-                        if (!mounted) return;
-                        Navigator.pop(context);
+                        if (!mounted || !dialogContext.mounted) return;
+                        await _closeInputDialog(dialogContext);
+                        _scrollToBottom();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Event added to calendar')),
+                          const SnackBar(
+                            content: Text('Event added to calendar and chat'),
+                          ),
                         );
                       } catch (e) {
-                        if (!mounted) return;
+                        if (!mounted || !dialogContext.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Error adding event: $e')),
                         );
@@ -281,14 +334,173 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     descriptionController.dispose();
   }
 
+  Future<void> _showCreateContentSheet() async {
+    Map<String, dynamic>? groupData;
+    try {
+      final groupSnapshot = await _chatService.getGroup(widget.groupId);
+      groupData = groupSnapshot.data() as Map<String, dynamic>?;
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load group permissions: $error')),
+      );
+      return;
+    }
+    if (groupData == null || !mounted) return;
+
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    final canManageEvents = _chatService.hasGroupPermission(
+      groupData,
+      email,
+      'manage_events',
+    );
+    final canPostAnnouncements = _chatService.hasGroupPermission(
+      groupData,
+      email,
+      'post_announcements',
+    );
+    final selectedAction = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            const ListTile(
+              title: Text('Share with your club'),
+              subtitle: Text('Choose what you want to post.'),
+            ),
+            if (canManageEvents)
+              ListTile(
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('Create an event'),
+                subtitle: const Text('Add it to the calendar and chat.'),
+                onTap: () => Navigator.pop(context, 'event'),
+              ),
+            if (canPostAnnouncements)
+              ListTile(
+                leading: const Icon(Icons.campaign_outlined),
+                title: const Text('Post an announcement'),
+                subtitle: const Text('Share an update in the chat.'),
+                onTap: () => Navigator.pop(context, 'announcement'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    if (selectedAction == 'event') {
+      await _showAddEventDialog(widget.groupName);
+    } else if (selectedAction == 'announcement') {
+      await _showAnnouncementDialog();
+    }
+  }
+
+  Future<void> _showAnnouncementDialog() async {
+    final titleController = TextEditingController();
+    final messageController = TextEditingController();
+    bool isSaving = false;
+    String? validationMessage;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Post an announcement'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (validationMessage != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      validationMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ),
+              TextField(
+                controller: titleController,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Headline',
+                  hintText: 'What should everyone know?',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messageController,
+                minLines: 2,
+                maxLines: 5,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Details',
+                  hintText: 'Add the important details',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => _closeInputDialog(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (titleController.text.trim().isEmpty ||
+                          messageController.text.trim().isEmpty) {
+                        setDialogState(() {
+                          validationMessage =
+                              'Add a headline and details to continue.';
+                        });
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      try {
+                        await _chatService.postAnnouncement(
+                          widget.groupId,
+                          title: titleController.text,
+                          message: messageController.text,
+                        );
+                        if (!mounted || !dialogContext.mounted) return;
+                        await _closeInputDialog(dialogContext);
+                        _scrollToBottom();
+                      } catch (error) {
+                        if (!mounted || !dialogContext.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Could not post announcement: $error',
+                            ),
+                          ),
+                        );
+                        setDialogState(() => isSaving = false);
+                      }
+                    },
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Post'),
+            ),
+          ],
+        ),
+      ),
+    );
+    titleController.dispose();
+    messageController.dispose();
+  }
+
   Future<void> _showGroupSettingsDialog(
     Map<String, dynamic> groupData,
     List<String> members,
-    List<String> admins,
     String createdBy,
-    bool isAdmin,
+    bool canManageSettings,
   ) async {
-    if (!isAdmin) return;
+    if (!canManageSettings) return;
 
     String whoCanPost = groupData['whoCanPost'] ?? 'all';
     int themeColor = groupData['themeColor'] ?? Colors.grey[900]!.toARGB32();
@@ -297,14 +509,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final String publicRequestStatus =
         (groupData['publicRequestStatus'] as String?) ?? 'none';
     final keywordsController = TextEditingController(
-      text: List<String>.from(groupData['keywords'] ?? const <String>[]).join(', '),
+      text: List<String>.from(
+        groupData['keywords'] ?? const <String>[],
+      ).join(', '),
     );
-    final adminSet = {...admins};
-    if (createdBy.isNotEmpty) adminSet.add(createdBy);
-
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Group Settings'),
           content: SingleChildScrollView(
@@ -318,10 +529,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     isPublic
                         ? 'This club is public and joinable from discovery.'
                         : publicRequestStatus == 'pending'
-                            ? 'Public listing request is waiting for school admin approval.'
-                            : publicRequestStatus == 'rejected'
-                                ? 'A school admin rejected the last public listing request.'
-                                : 'This club is private and hidden from discovery.',
+                        ? 'Public listing request is waiting for school admin approval.'
+                        : publicRequestStatus == 'rejected'
+                        ? 'A school admin rejected the last public listing request.'
+                        : 'This club is private and hidden from discovery.',
                   ),
                   trailing: _buildVisibilityActionChip(
                     context,
@@ -334,12 +545,42 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   decoration: const InputDecoration(labelText: 'Who can post'),
                   items: const [
                     DropdownMenuItem(value: 'all', child: Text('All members')),
-                    DropdownMenuItem(value: 'admins', child: Text('Admins only')),
+                    DropdownMenuItem(
+                      value: 'admins',
+                      child: Text('Members with posting permission'),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value != null) setDialogState(() => whoCanPost = value);
                   },
                 ),
+                if (createdBy == FirebaseAuth.instance.currentUser?.email) ...[
+                  const SizedBox(height: 8),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.admin_panel_settings_outlined),
+                      title: const Text('Roles & permissions'),
+                      subtitle: Text(
+                        '${(groupData['roles'] as List?)?.length ?? ClubRole.builtInRoles.length} roles · Assign titles and access',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.push<void>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GroupRolesPage(
+                              groupId: widget.groupId,
+                              members: members,
+                              groupData: groupData,
+                              ownerEmail: createdBy,
+                            ),
+                          ),
+                        );
+                        if (context.mounted) setDialogState(() {});
+                      },
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -351,25 +592,28 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
-                  children: [
-                    AppColors.navy,
-                    AppColors.brass,
-                    Colors.blue,
-                    Colors.green,
-                    Colors.orange,
-                  ].map((color) {
-                    final isSelected = themeColor == color.toARGB32();
-                    return GestureDetector(
-                      onTap: () => setDialogState(() => themeColor = color.toARGB32()),
-                      child: CircleAvatar(
-                        radius: isSelected ? 16 : 14,
-                        backgroundColor: color,
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white)
-                            : null,
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      [
+                        AppColors.navy,
+                        AppColors.brass,
+                        Colors.blue,
+                        Colors.green,
+                        Colors.orange,
+                      ].map((color) {
+                        final isSelected = themeColor == color.toARGB32();
+                        return GestureDetector(
+                          onTap: () => setDialogState(
+                            () => themeColor = color.toARGB32(),
+                          ),
+                          child: CircleAvatar(
+                            radius: isSelected ? 16 : 14,
+                            backgroundColor: color,
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white)
+                                : null,
+                          ),
+                        );
+                      }).toList(),
                 ),
                 const SizedBox(height: 16),
                 Align(
@@ -382,7 +626,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
-                  children: ['group', 'sports', 'school', 'chat', 'star'].map((name) {
+                  children: ['group', 'sports', 'school', 'chat', 'star'].map((
+                    name,
+                  ) {
                     return ChoiceChip(
                       label: Icon(_iconFromName(name)),
                       selected: themeIcon == name,
@@ -412,7 +658,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                             .where((value) => value.isNotEmpty)
                             .toList();
                         if (existing.any(
-                          (value) => value.toLowerCase() == keyword.toLowerCase(),
+                          (value) =>
+                              value.toLowerCase() == keyword.toLowerCase(),
                         )) {
                           return;
                         }
@@ -424,41 +671,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Admins',
-                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ...members.map((member) {
-                  final isCreator = member == createdBy;
-                  return CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(member),
-                    subtitle: isCreator ? const Text('Group creator') : null,
-                    value: adminSet.contains(member),
-                    onChanged: isCreator
-                        ? null
-                        : (value) {
-                            setDialogState(() {
-                              if (value == true) {
-                                adminSet.add(member);
-                              } else {
-                                adminSet.remove(member);
-                              }
-                            });
-                          },
-                  );
-                }),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => _closeInputDialog(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
@@ -469,16 +687,24 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       .map((value) => value.trim())
                       .toList(),
                 );
-                await _chatService.updateGroupSettings(
-                  widget.groupId,
-                  whoCanPost: whoCanPost,
-                  themeColor: themeColor,
-                  themeIcon: themeIcon,
-                  keywords: keywords,
-                );
-                await _chatService.updateGroupAdmins(widget.groupId, adminSet.toList());
-                if (!mounted) return;
-                Navigator.pop(context);
+                try {
+                  await _chatService.updateGroupSettings(
+                    widget.groupId,
+                    whoCanPost: whoCanPost,
+                    themeColor: themeColor,
+                    themeIcon: themeIcon,
+                    keywords: keywords,
+                  );
+                  if (!mounted || !dialogContext.mounted) return;
+                  await _closeInputDialog(dialogContext);
+                } catch (error) {
+                  if (!mounted || !dialogContext.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not save group settings: $error'),
+                    ),
+                  );
+                }
               },
               child: const Text('Save'),
             ),
@@ -531,7 +757,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('School admin approval requested for public listing.'),
+            content: Text(
+              'School admin approval requested for public listing.',
+            ),
           ),
         );
       },
@@ -551,9 +779,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error opening DM: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error opening DM: $e')));
     }
   }
 
@@ -568,7 +796,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         replyToMessageId: _replyContext?['id'] as String?,
         replyToText: _replyContext?['preview'] as String?,
         replyToSender: _replyContext?['sender'] as String?,
-        threadRootId: (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
+        threadRootId:
+            (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
       );
       _messageController.clear();
       _clearReplyContext();
@@ -580,9 +809,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending message: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error sending message: $e')));
     }
   }
 
@@ -618,7 +847,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (image == null) return;
       setState(() => _isSending = true);
 
-      final imageUrl = await _chatService.uploadImage(File(image.path), widget.groupId);
+      final imageUrl = await _chatService.uploadImage(
+        File(image.path),
+        widget.groupId,
+      );
       await _chatService.sendMessage(
         widget.groupId,
         '',
@@ -627,15 +859,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         replyToMessageId: _replyContext?['id'] as String?,
         replyToText: _replyContext?['preview'] as String?,
         replyToSender: _replyContext?['sender'] as String?,
-        threadRootId: (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
+        threadRootId:
+            (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
       );
       _clearReplyContext();
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending image: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error sending image: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -664,15 +897,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         replyToMessageId: _replyContext?['id'] as String?,
         replyToText: _replyContext?['preview'] as String?,
         replyToSender: _replyContext?['sender'] as String?,
-        threadRootId: (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
+        threadRootId:
+            (_replyContext?['threadRootId'] as String?) ?? _activeThreadRootId,
       );
       _clearReplyContext();
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending file: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error sending file: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -784,7 +1018,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () => _closeInputDialog(dialogContext),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
@@ -806,10 +1040,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           options: options,
                         );
                         if (!mounted || !dialogStateContext.mounted) return;
-                        Navigator.pop(dialogContext);
+                        await _closeInputDialog(dialogContext);
                         _scrollToBottom();
                       } catch (e) {
-                        if (!mounted) return;
+                        if (!mounted || !dialogStateContext.mounted) return;
                         ScaffoldMessenger.of(pageContext).showSnackBar(
                           SnackBar(content: Text('Error creating poll: $e')),
                         );
@@ -833,7 +1067,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     required String messageId,
     required Map<String, dynamic> message,
     required int replyCount,
-    required bool isAdmin,
+    required bool canModerateMessages,
   }) async {
     showModalBottomSheet(
       context: context,
@@ -855,16 +1089,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 title: const Text('View thread'),
                 onTap: () {
                   Navigator.pop(context);
-                  _openThread((message['threadRootId'] as String?) ?? messageId);
+                  _openThread(
+                    (message['threadRootId'] as String?) ?? messageId,
+                  );
                 },
               ),
-            if (isAdmin)
+            if (canModerateMessages)
               ListTile(
                 leading: const Icon(Icons.push_pin_outlined),
                 title: const Text('Pin message'),
                 onTap: () async {
                   Navigator.pop(context);
-                  await _chatService.pinMessage(widget.groupId, messageId, message);
+                  await _chatService.pinMessage(
+                    widget.groupId,
+                    messageId,
+                    message,
+                  );
                 },
               ),
           ],
@@ -892,9 +1132,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error generating summary: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error generating summary: $e')));
     } finally {
       if (mounted) {
         setState(() => _isGeneratingSummary = false);
@@ -929,15 +1169,80 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       await _chatService.leaveGroup(widget.groupId);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Left group')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Left group')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error leaving group: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error leaving group: $e')));
     }
+  }
+
+  Widget _buildClubPostCard(Map<String, dynamic> message, Color accentColor) {
+    final isEvent = message['type'] == 'event';
+    final eventDate = (message['eventDate'] as Timestamp?)?.toDate();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isEvent ? Icons.event_outlined : Icons.campaign_outlined,
+                size: 17,
+                color: accentColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isEvent ? 'CLUB EVENT' : 'ANNOUNCEMENT',
+                style: TextStyle(
+                  color: accentColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            (message['title'] as String?) ?? 'Club update',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (eventDate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${eventDate.month}/${eventDate.day}/${eventDate.year} · ${_formatTime(eventDate)}',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if ((message['text'] as String? ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              (message['text'] as String).trim(),
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildReplyPreview(
@@ -964,7 +1269,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         children: [
           Text(
             _displayName(replySender),
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: mutedColor),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: mutedColor,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1018,11 +1327,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     fileName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (fileSize.isNotEmpty || extension.isNotEmpty)
                     Text(
-                      [if (extension.isNotEmpty) extension.toUpperCase(), if (fileSize.isNotEmpty) fileSize].join(' • '),
+                      [
+                        if (extension.isNotEmpty) extension.toUpperCase(),
+                        if (fileSize.isNotEmpty) fileSize,
+                      ].join(' • '),
                       style: TextStyle(fontSize: 11, color: mutedColor),
                     ),
                 ],
@@ -1054,7 +1369,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(question, style: TextStyle(color: textColor, fontWeight: FontWeight.w700)),
+        Text(
+          question,
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 10),
         ...options.map((option) {
           final optionId = option['id'] as String? ?? '';
@@ -1064,9 +1382,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: InkWell(
-              onTap: () => _chatService.togglePollVote(widget.groupId, messageId, optionId),
+              onTap: () => _chatService.togglePollVote(
+                widget.groupId,
+                messageId,
+                optionId,
+              ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? accentColor.withValues(alpha: 0.14)
@@ -1080,10 +1405,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(child: Text(label, style: TextStyle(color: textColor))),
+                    Expanded(
+                      child: Text(label, style: TextStyle(color: textColor)),
+                    ),
                     Text(
                       '${voters.length}',
-                      style: TextStyle(color: isSelected ? accentColor : mutedColor, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: isSelected ? accentColor : mutedColor,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1108,9 +1438,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       runSpacing: 6,
       children: _quickReactions.map((emoji) {
         final count = counts[emoji] ?? 0;
-        final isSelected = _userHasReaction(reactionKeys, emoji, currentUserEmail);
+        final isSelected = _userHasReaction(
+          reactionKeys,
+          emoji,
+          currentUserEmail,
+        );
         return InkWell(
-          onTap: () => _chatService.toggleMessageReaction(widget.groupId, messageId, emoji),
+          onTap: () => _chatService.toggleMessageReaction(
+            widget.groupId,
+            messageId,
+            emoji,
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -1172,20 +1510,52 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       builder: (context, groupSnapshot) {
         final groupData = groupSnapshot.data?.data() as Map<String, dynamic>?;
         final members = List<String>.from(groupData?['members'] ?? []);
-        final admins = List<String>.from(groupData?['admins'] ?? []);
         final createdBy = groupData?['createdBy'] ?? '';
         final whoCanPost = groupData?['whoCanPost'] ?? 'all';
-        final themeColorValue = groupData?['themeColor'] ?? Colors.grey[900]!.toARGB32();
+        final themeColorValue =
+            groupData?['themeColor'] ?? Colors.grey[900]!.toARGB32();
         final themeIconName = groupData?['themeIcon'] ?? 'group';
         final themeColor = Color(themeColorValue);
-        final effectiveAdmins = admins.isNotEmpty
-            ? admins
-            : (createdBy.isNotEmpty ? <String>[createdBy] : <String>[]);
-        final isAdmin = effectiveAdmins.contains(currentUserEmailSafe);
-        final isOwner = createdBy == currentUserEmailSafe;
-        final canSend = whoCanPost == 'all' || isAdmin;
+        final canManageSettings =
+            groupData != null &&
+            _chatService.hasGroupPermission(
+              groupData,
+              currentUserEmailSafe,
+              'manage_settings',
+            );
+        final canManageMessages =
+            groupData != null &&
+            _chatService.hasGroupPermission(
+              groupData,
+              currentUserEmailSafe,
+              'manage_messages',
+            );
+        final canManageEvents =
+            groupData != null &&
+            _chatService.hasGroupPermission(
+              groupData,
+              currentUserEmailSafe,
+              'manage_events',
+            );
+        final canPostAnnouncements =
+            groupData != null &&
+            _chatService.hasGroupPermission(
+              groupData,
+              currentUserEmailSafe,
+              'post_announcements',
+            );
+        final canSend =
+            whoCanPost == 'all' ||
+            (groupData != null &&
+                _chatService.hasGroupPermission(
+                  groupData,
+                  currentUserEmailSafe,
+                  'send_messages',
+                ));
         final brightness = ThemeData.estimateBrightnessForColor(themeColor);
-        final onThemeColor = brightness == Brightness.dark ? Colors.white : Colors.black;
+        final onThemeColor = brightness == Brightness.dark
+            ? Colors.white
+            : Colors.black;
 
         return Scaffold(
           backgroundColor: Colors.transparent,
@@ -1194,7 +1564,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             flexibleSpace: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [themeColor, Color.lerp(themeColor, AppColors.deepBlue, 0.5) ?? themeColor],
+                  colors: [
+                    themeColor,
+                    Color.lerp(themeColor, AppColors.deepBlue, 0.5) ??
+                        themeColor,
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -1210,7 +1584,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(_iconFromName(themeIconName), color: onThemeColor, size: 18),
+                    Icon(
+                      _iconFromName(themeIconName),
+                      color: onThemeColor,
+                      size: 18,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -1223,45 +1601,53 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 ),
                 Text(
                   '${members.length} members',
-                  style: TextStyle(color: onThemeColor.withValues(alpha: 0.8), fontSize: 12),
+                  style: TextStyle(
+                    color: onThemeColor.withValues(alpha: 0.8),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
             iconTheme: IconThemeData(color: onThemeColor),
             actions: [
-              if (isOwner)
+              if (canManageEvents || canPostAnnouncements)
                 IconButton(
-                  icon: const Icon(Icons.event_note),
-                  tooltip: 'Manage calendar',
-                  onPressed: () => _showAddEventDialog(widget.groupName),
+                  icon: const Icon(Icons.add_circle_outline),
+                  tooltip: 'Create an event or announcement',
+                  onPressed: _showCreateContentSheet,
                 ),
               IconButton(
                 icon: _isGeneratingSummary
                     ? SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: onThemeColor),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: onThemeColor,
+                        ),
                       )
                     : const Icon(Icons.summarize_outlined),
                 tooltip: 'Summarize missed activity',
-                onPressed: _isGeneratingSummary ? null : _summarizeRecentActivity,
+                onPressed: _isGeneratingSummary
+                    ? null
+                    : _summarizeRecentActivity,
               ),
-              if (isAdmin)
+              if (canManageSettings)
                 IconButton(
                   icon: const Icon(Icons.settings),
                   tooltip: 'Group settings',
                   onPressed: () => _showGroupSettingsDialog(
-                    groupData ?? {},
+                    groupData,
                     members,
-                    effectiveAdmins,
                     createdBy,
-                    isAdmin,
+                    canManageSettings,
                   ),
                 ),
               IconButton(
                 icon: const Icon(Icons.home),
                 tooltip: 'Back to home',
-                onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
               ),
               IconButton(
                 icon: const Icon(Icons.exit_to_app),
@@ -1280,22 +1666,36 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Join Code:', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                          Text(
+                            'Join Code:',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
                               Text(
                                 joinCode,
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                ),
                               ),
                               const Spacer(),
                               IconButton(
                                 icon: const Icon(Icons.copy),
                                 onPressed: () {
-                                  Clipboard.setData(ClipboardData(text: joinCode));
+                                  Clipboard.setData(
+                                    ClipboardData(text: joinCode),
+                                  );
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Join code copied!')),
+                                    const SnackBar(
+                                      content: Text('Join code copied!'),
+                                    ),
                                   );
                                 },
                               ),
@@ -1304,16 +1704,45 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           const SizedBox(height: 16),
                           Text(
                             'Share this code with others to let them join the group.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
                           const SizedBox(height: 16),
-                          Text('Members', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          Text(
+                            'Members',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           ...members.map((member) {
                             final isSelf = member == currentUserEmailSafe;
                             return Row(
                               children: [
-                                Expanded(child: Text(member)),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(member),
+                                      Text(
+                                        _chatService.groupRoleName(
+                                          groupData ?? const {},
+                                          member,
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 if (!isSelf)
                                   TextButton(
                                     onPressed: () {
@@ -1328,24 +1757,31 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         ],
                       ),
                       actions: [
-                        if (isOwner)
+                        if (canManageEvents)
                           TextButton(
                             onPressed: () {
                               Navigator.pop(context);
                               _showAddEventDialog(widget.groupName);
                             },
-                            child: const Text('Manage Calendar'),
+                            child: const Text('Create Event'),
                           ),
-                        if (isAdmin)
+                        if (canPostAnnouncements)
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _showAnnouncementDialog();
+                            },
+                            child: const Text('Post Announcement'),
+                          ),
+                        if (canManageSettings)
                           TextButton(
                             onPressed: () {
                               Navigator.pop(context);
                               _showGroupSettingsDialog(
-                                groupData ?? {},
+                                groupData,
                                 members,
-                                effectiveAdmins,
                                 createdBy,
-                                isAdmin,
+                                canManageSettings,
                               );
                             },
                             child: const Text('Manage Group'),
@@ -1355,7 +1791,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                             Navigator.pop(context);
                             _leaveGroup();
                           },
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
                           child: const Text('Leave Group'),
                         ),
                         TextButton(
@@ -1380,7 +1818,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: themeColor.withValues(alpha: 0.35)),
+                      border: Border.all(
+                        color: themeColor.withValues(alpha: 0.35),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -1400,7 +1840,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                (groupData?['pinnedMessageText'] as String?) ?? '',
+                                (groupData?['pinnedMessageText'] as String?) ??
+                                    '',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1408,12 +1849,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => _openThread((groupData?['pinnedMessageId'] as String?)!),
+                          onPressed: () => _openThread(
+                            (groupData?['pinnedMessageId'] as String?)!,
+                          ),
                           child: const Text('Open'),
                         ),
-                        if (isAdmin)
+                        if (canManageMessages)
                           IconButton(
-                            onPressed: () => _chatService.clearPinnedMessage(widget.groupId),
+                            onPressed: () =>
+                                _chatService.clearPinnedMessage(widget.groupId),
                             icon: const Icon(Icons.close),
                           ),
                       ],
@@ -1430,7 +1874,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         return Center(child: Text('Error: ${snapshot.error}'));
                       }
 
-                      final allMessages = snapshot.data?.docs ?? const <QueryDocumentSnapshot>[];
+                      final allMessages =
+                          snapshot.data?.docs ??
+                          const <QueryDocumentSnapshot>[];
                       final messages = _filteredMessages(allMessages);
                       if (messages.isEmpty) {
                         return Center(
@@ -1438,7 +1884,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                             _activeThreadRootId == null
                                 ? 'No messages yet. Start the conversation!'
                                 : 'No replies in this thread yet.',
-                            style: TextStyle(color: colorScheme.onSurfaceVariant),
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         );
                       }
@@ -1446,6 +1894,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       return ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(16),
+                        findChildIndexCallback: (key) {
+                          if (key is! ValueKey<String>) return null;
+                          final index = messages.indexWhere(
+                            (message) => message.id == key.value,
+                          );
+                          return index < 0 ? null : index;
+                        },
                         itemCount: messages.length + (_jarvisThinking ? 1 : 0),
                         itemBuilder: (context, index) {
                           if (_jarvisThinking && index == messages.length) {
@@ -1458,9 +1913,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                   const SizedBox(width: 8),
                                   Container(
                                     margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface,
+                                      color: isDark
+                                          ? colorScheme.surfaceContainerHigh
+                                          : colorScheme.surface,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
@@ -1477,7 +1937,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                         const SizedBox(width: 8),
                                         Text(
                                           'Jarvis is thinking...',
-                                          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+                                          style: TextStyle(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1488,35 +1951,67 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           }
 
                           final messageDoc = messages[index];
-                          final message = messageDoc.data() as Map<String, dynamic>;
+                          final message =
+                              messageDoc.data() as Map<String, dynamic>;
                           final messageId = messageDoc.id;
+                          final messageType =
+                              (message['type'] as String?) ?? 'text';
+                          final isClubPost =
+                              messageType == 'event' ||
+                              messageType == 'announcement';
                           final text = (message['text'] as String?) ?? '';
                           final imageUrl = message['imageUrl'] as String?;
-                          final senderEmail = (message['senderEmail'] as String?) ?? '';
+                          final senderEmail =
+                              (message['senderEmail'] as String?) ?? '';
                           final isMe = senderEmail == currentUserEmail;
-                          final timestamp = (message['timestamp'] as Timestamp?)?.toDate();
+                          final timestamp = (message['timestamp'] as Timestamp?)
+                              ?.toDate();
                           final fileData = message['file'] == null
                               ? null
-                              : Map<String, dynamic>.from(message['file'] as Map);
+                              : Map<String, dynamic>.from(
+                                  message['file'] as Map,
+                                );
                           final pollData = message['poll'] == null
                               ? null
-                              : Map<String, dynamic>.from(message['poll'] as Map);
-                          final reactionKeys = List<String>.from(message['reactions'] ?? const <String>[]);
-                          final replyCount = _replyCountForMessage(messageId, allMessages);
-                          final bubbleTextColor = isMe ? onThemeColor : colorScheme.onSurface;
-                          final bubbleMutedColor = isMe
+                              : Map<String, dynamic>.from(
+                                  message['poll'] as Map,
+                                );
+                          final reactionKeys = List<String>.from(
+                            message['reactions'] ?? const <String>[],
+                          );
+                          final replyCount = _replyCountForMessage(
+                            messageId,
+                            allMessages,
+                          );
+                          final bubbleTextColor = isClubPost
+                              ? colorScheme.onSurface
+                              : isMe
+                              ? onThemeColor
+                              : colorScheme.onSurface;
+                          final bubbleMutedColor = isClubPost
+                              ? colorScheme.onSurfaceVariant
+                              : isMe
                               ? onThemeColor.withValues(alpha: 0.72)
                               : colorScheme.onSurfaceVariant;
 
                           return AnimatedEntrance(
+                            key: ValueKey(messageId),
                             child: Align(
-                              alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                              alignment: isMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
                               child: Row(
-                                mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                mainAxisAlignment: isMe
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (!isMe) ...[
-                                    _buildAvatar(senderEmail, isDark, colorScheme),
+                                    _buildAvatar(
+                                      senderEmail,
+                                      isDark,
+                                      colorScheme,
+                                    ),
                                     const SizedBox(width: 8),
                                   ],
                                   Flexible(
@@ -1525,42 +2020,83 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                         messageId: messageId,
                                         message: message,
                                         replyCount: replyCount,
-                                        isAdmin: isAdmin,
+                                        canModerateMessages: canManageMessages,
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                        crossAxisAlignment: isMe
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
                                         children: [
                                           Container(
-                                            margin: const EdgeInsets.only(bottom: 8),
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                            margin: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 10,
+                                            ),
                                             constraints: BoxConstraints(
-                                              maxWidth: MediaQuery.of(context).size.width * 0.74,
+                                              maxWidth:
+                                                  MediaQuery.of(
+                                                    context,
+                                                  ).size.width *
+                                                  0.74,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: isMe
+                                              color: isClubPost
+                                                  ? colorScheme.surface
+                                                  : isMe
                                                   ? themeColor
                                                   : (isDark
-                                                      ? colorScheme.surfaceContainerHigh
-                                                      : colorScheme.surface),
-                                              borderRadius: BorderRadius.circular(12),
+                                                        ? colorScheme
+                                                              .surfaceContainerHigh
+                                                        : colorScheme.surface),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: isClubPost
+                                                  ? Border.all(
+                                                      color: themeColor
+                                                          .withValues(
+                                                            alpha: 0.35,
+                                                          ),
+                                                    )
+                                                  : null,
                                             ),
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 if (!isMe)
                                                   Text(
                                                     _displayName(senderEmail),
                                                     style: TextStyle(
                                                       fontSize: 10,
-                                                      color: Jarvis.isJarvis(senderEmail)
+                                                      color:
+                                                          Jarvis.isJarvis(
+                                                            senderEmail,
+                                                          )
                                                           ? AppColors.brass
-                                                          : colorScheme.onSurfaceVariant,
-                                                      fontWeight: FontWeight.bold,
+                                                          : colorScheme
+                                                                .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
-                                                if (!isMe) const SizedBox(height: 4),
-                                                _buildReplyPreview(message, bubbleTextColor, bubbleMutedColor),
-                                                if (pollData != null)
+                                                if (!isMe)
+                                                  const SizedBox(height: 4),
+                                                if (!isClubPost)
+                                                  _buildReplyPreview(
+                                                    message,
+                                                    bubbleTextColor,
+                                                    bubbleMutedColor,
+                                                  ),
+                                                if (isClubPost)
+                                                  _buildClubPostCard(
+                                                    message,
+                                                    themeColor,
+                                                  ),
+                                                if (!isClubPost &&
+                                                    pollData != null)
                                                   _buildPollCard(
                                                     messageId,
                                                     pollData,
@@ -1569,66 +2105,96 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                                     bubbleTextColor,
                                                     bubbleMutedColor,
                                                   ),
-                                                if (fileData != null) ...[
+                                                if (!isClubPost &&
+                                                    fileData != null) ...[
                                                   _buildFileAttachment(
                                                     context,
                                                     fileData,
                                                     bubbleTextColor,
                                                     bubbleMutedColor,
                                                   ),
-                                                  if (text.isNotEmpty) const SizedBox(height: 8),
+                                                  if (text.isNotEmpty)
+                                                    const SizedBox(height: 8),
                                                 ],
-                                                if (imageUrl != null) ...[
+                                                if (!isClubPost &&
+                                                    imageUrl != null) ...[
                                                   GestureDetector(
                                                     onTap: () {
                                                       showDialog(
                                                         context: context,
                                                         builder: (context) => Dialog(
-                                                          child: InteractiveViewer(
-                                                            child: Image.network(imageUrl),
-                                                          ),
+                                                          child:
+                                                              InteractiveViewer(
+                                                                child:
+                                                                    Image.network(
+                                                                      imageUrl,
+                                                                    ),
+                                                              ),
                                                         ),
                                                       );
                                                     },
                                                     child: ClipRRect(
-                                                      borderRadius: BorderRadius.circular(8),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
                                                       child: CachedNetworkImage(
                                                         imageUrl: imageUrl,
                                                         width: 200,
                                                         fit: BoxFit.cover,
                                                         memCacheWidth: 600,
-                                                        placeholder: (context, url) => const SizedBox(
-                                                          width: 200,
-                                                          height: 200,
-                                                          child: Center(
-                                                            child: CircularProgressIndicator(),
-                                                          ),
-                                                        ),
+                                                        placeholder:
+                                                            (
+                                                              context,
+                                                              url,
+                                                            ) => const SizedBox(
+                                                              width: 200,
+                                                              height: 200,
+                                                              child: Center(
+                                                                child:
+                                                                    CircularProgressIndicator(),
+                                                              ),
+                                                            ),
                                                       ),
                                                     ),
                                                   ),
-                                                  if (text.isNotEmpty) const SizedBox(height: 8),
+                                                  if (text.isNotEmpty)
+                                                    const SizedBox(height: 8),
                                                 ],
-                                                if (text.isNotEmpty && pollData == null)
+                                                if (!isClubPost &&
+                                                    text.isNotEmpty &&
+                                                    pollData == null)
                                                   Text(
                                                     text,
-                                                    style: TextStyle(color: bubbleTextColor, fontSize: 14),
+                                                    style: TextStyle(
+                                                      color: bubbleTextColor,
+                                                      fontSize: 14,
+                                                    ),
                                                   ),
                                                 if (timestamp != null) ...[
                                                   const SizedBox(height: 6),
                                                   Text(
                                                     _formatTime(timestamp),
-                                                    style: TextStyle(fontSize: 9, color: bubbleMutedColor),
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: bubbleMutedColor,
+                                                    ),
                                                   ),
                                                 ],
                                               ],
                                             ),
                                           ),
-                                          if (replyCount > 0 && _activeThreadRootId == null)
+                                          if (replyCount > 0 &&
+                                              _activeThreadRootId == null)
                                             Padding(
-                                              padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
+                                              padding: const EdgeInsets.only(
+                                                bottom: 6,
+                                                left: 4,
+                                                right: 4,
+                                              ),
                                               child: InkWell(
-                                                onTap: () => _openThread(messageId),
+                                                onTap: () =>
+                                                    _openThread(messageId),
                                                 child: Text(
                                                   '$replyCount repl${replyCount == 1 ? 'y' : 'ies'}',
                                                   style: TextStyle(
@@ -1642,8 +2208,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                           _buildReactionBar(
                                             messageId: messageId,
                                             reactionKeys: reactionKeys,
-                                            currentUserEmail: currentUserEmailSafe,
-                                            textColor: colorScheme.onSurfaceVariant,
+                                            currentUserEmail:
+                                                currentUserEmailSafe,
+                                            textColor:
+                                                colorScheme.onSurfaceVariant,
                                             accentColor: themeColor,
                                           ),
                                         ],
@@ -1652,7 +2220,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                   ),
                                   if (isMe) ...[
                                     const SizedBox(width: 8),
-                                    _buildAvatar(senderEmail, isDark, colorScheme),
+                                    _buildAvatar(
+                                      senderEmail,
+                                      isDark,
+                                      colorScheme,
+                                    ),
                                   ],
                                 ],
                               ),
@@ -1666,10 +2238,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: (isDark ? colorScheme.surfaceContainerHigh : colorScheme.surface)
-                        .withValues(alpha: 0.92),
+                    color:
+                        (isDark
+                                ? colorScheme.surfaceContainerHigh
+                                : colorScheme.surface)
+                            .withValues(alpha: 0.92),
                     border: Border(
-                      top: BorderSide(color: AppColors.cyan.withValues(alpha: 0.18), width: 1),
+                      top: BorderSide(
+                        color: AppColors.cyan.withValues(alpha: 0.18),
+                        width: 1,
+                      ),
                     ),
                   ),
                   child: Column(
@@ -1679,7 +2257,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         Container(
                           width: double.infinity,
                           margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(12),
@@ -1689,7 +2270,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               const Icon(Icons.forum_outlined, size: 18),
                               const SizedBox(width: 8),
                               const Expanded(child: Text('Replying in thread')),
-                              TextButton(onPressed: _closeThread, child: const Text('Exit')),
+                              TextButton(
+                                onPressed: _closeThread,
+                                child: const Text('Exit'),
+                              ),
                             ],
                           ),
                         ),
@@ -1697,7 +2281,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                         Container(
                           width: double.infinity,
                           margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(12),
@@ -1718,10 +2305,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      (_replyContext?['preview'] as String?) ?? '',
+                                      (_replyContext?['preview'] as String?) ??
+                                          '',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -1736,8 +2327,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.add_circle_outline, color: colorScheme.onSurfaceVariant),
-                            onPressed: _isSending || !canSend ? null : _showAttachmentSheet,
+                            icon: Icon(
+                              Icons.add_circle_outline,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            onPressed: _isSending || !canSend
+                                ? null
+                                : _showAttachmentSheet,
                           ),
                           Expanded(
                             child: TextField(
@@ -1745,8 +2341,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               decoration: InputDecoration(
                                 hintText: canSend
                                     ? 'Type a message...'
-                                    : 'Only admins can send messages',
-                                hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                                    : "You don't have permission to post",
+                                hintStyle: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide.none,
@@ -1755,13 +2353,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                 fillColor: isDark
                                     ? colorScheme.surfaceContainerHigh
                                     : colorScheme.surfaceContainerLow,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 10,
+                                ),
                               ),
                               style: TextStyle(color: colorScheme.onSurface),
                               maxLines: null,
                               textCapitalization: TextCapitalization.sentences,
                               enabled: !_isSending && canSend,
-                              onSubmitted: (_) => canSend ? _sendMessage() : null,
+                              onSubmitted: (_) =>
+                                  canSend ? _sendMessage() : null,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1771,10 +2373,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : IconButton(
-                                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                                    icon: const Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
                                     onPressed: canSend ? _sendMessage : null,
                                   ),
                           ),

@@ -21,9 +21,9 @@ GroupApp's features:
 - Group chats: users create or join group chats. Public groups can be joined with a 6-character join code, or discovered on the Discover page. Private groups require an invite.
 - Join codes: each group has a 6-character code (letters + numbers). Share it so others can join. Find it via the group's info (i) button.
 - Direct messages: users can message each other one-on-one, including tapping "Message" next to a member in a group's info panel.
-- Calendar & events: group admins/owners can add events (title, description, date, time) that appear on every member's home calendar. Filter which groups show via the calendar settings (tune) icon.
-- Announcements & notifications: the home page shows recent group activity and announcements.
-- Roles: a group has an owner (creator) and admins. Admins can change group settings (public/private, who can post, theme color/icon) and manage the admin list. "Who can post" can be set to all members or admins only.
+- Calendar & events: club officers with event permissions can add events that appear on the group chat and every member's home calendar. Filter which groups show via the calendar settings (tune) icon.
+- Announcements: authorized club officers can publish announcements directly into the group chat.
+- Roles: the creator is President and can appoint Co-Presidents and Officers, assign members, and create custom titles with configurable permissions. "Who can post" can be set to all members or members with posting permission.
 - Profile: users set a first/last name and profile picture in Settings. Settings also has a Dark Mode toggle.
 
 Guidelines:
@@ -188,17 +188,23 @@ export const checkInMember = onCall(
     const group = groupSnap.data() ?? {};
     const event = eventSnap.data() ?? {};
 
-    // Only club admins, the group owner, or a school admin may scan.
+    // Check-in permission is granted by a club role. Older clubs without role
+    // assignments continue to use their existing admins list.
     // schoolAdmin is read off the ID token (set by verifyAdminSignupCode), so
     // it cannot be forged — but it only refreshes when the token does.
     const admins: string[] = Array.isArray(group.admins) ? group.admins : [];
-    const isClubAdmin =
-      admins.includes(callerEmail) || group.createdBy === callerEmail;
+    const memberPermissions = group.memberPermissions as
+      | Record<string, string[]>
+      | undefined;
+    const isClubAdmin = group.createdBy === callerEmail ||
+      (memberPermissions
+        ? (memberPermissions[callerEmail] ?? []).includes("manage_check_ins")
+        : admins.includes(callerEmail));
     const isSchoolAdmin = request.auth.token.schoolAdmin === true;
     if (!isClubAdmin && !isSchoolAdmin) {
       throw new HttpsError(
         "permission-denied",
-        "Only club admins can check members in.",
+        "You need the event attendance permission to check members in.",
       );
     }
 

@@ -2,9 +2,8 @@ rules_version = '2';
 
 // GroupApp Firestore rules.
 //
-// Identity note: this app keys membership on EMAIL, not uid (groups.members
-// and groups.admins are arrays of emails), so these rules compare against
-// request.auth.token.email throughout.
+// Identity note: this app keys membership and role permissions on EMAIL, so
+// these rules compare against request.auth.token.email throughout.
 //
 // The check-in rules at the bottom are the strict ones: they replace what a
 // Cloud Function would otherwise enforce, so that QR check-in works on the
@@ -30,10 +29,17 @@ service cloud.firestore {
       return signedIn() && myEmail() in groupData(groupId).members;
     }
 
-    function isGroupAdmin(groupId) {
+    function hasGroupPermission(groupId, permission) {
       let g = groupData(groupId);
       return signedIn() &&
-        (myEmail() in g.admins || g.createdBy == myEmail());
+        (g.createdBy == myEmail()
+          || ('memberPermissions' in g
+              && myEmail() in g.memberPermissions
+              && permission in g.memberPermissions[myEmail()])
+          // Existing clubs keep their former admin behavior until the owner
+          // saves the new role assignments.
+          || (!('memberPermissions' in g)
+              && myEmail() in g.admins));
     }
 
     // Set by the verifyAdminSignupCode flow as a custom claim.
@@ -80,9 +86,26 @@ service cloud.firestore {
         && myEmail() in request.resource.data.members
         && myEmail() in request.resource.data.admins;
 
-      // Admins manage settings. Non-admin members may still update the doc
-      // in order to join (members is append-only for them, below).
-      allow update: if isGroupAdmin(groupId) || isSchoolAdmin() || (
+      // Only the creator may change role definitions or assignments.
+      // Other roles can update only the group settings their permission allows.
+      allow update: if isSchoolAdmin()
+        || (signedIn() && resource.data.createdBy == myEmail())
+        || (hasGroupPermission(groupId, 'manage_settings')
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 'isPublic', 'requestedPublicOnCreate',
+                 'publicRequestStatus', 'publicRequestSubmittedAt',
+                 'publicReviewedAt', 'publicReviewedBy',
+                 'publicRejectionReason', 'whoCanPost', 'themeColor',
+                 'themeIcon', 'bannerUrl', 'overview', 'keywords'
+               ]))
+        || (hasGroupPermission(groupId, 'manage_messages')
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 'pinnedMessageId', 'pinnedMessageText',
+                 'pinnedMessageSender', 'pinnedAt'
+               ]))
+        || (
         signedIn()
         // A joining user may only add themselves to members and change
         // nothing else about the group.
@@ -101,25 +124,44 @@ service cloud.firestore {
         allow read: if isMember(groupId) || isSchoolAdmin();
         allow create: if isMember(groupId)
           && request.resource.data.senderEmail == myEmail()
-          // Honour the group's whoCanPost setting.
-          && (groupData(groupId).whoCanPost != 'admins' || isGroupAdmin(groupId));
+          && (
+            (request.resource.data.type == 'event'
+              && hasGroupPermission(groupId, 'manage_events'))
+            || (request.resource.data.type == 'announcement'
+              && hasGroupPermission(groupId, 'post_announcements'))
+            // Honour the group's whoCanPost setting for regular messages.
+            || (request.resource.data.type != 'event'
+              && request.resource.data.type != 'announcement'
+              && (groupData(groupId).whoCanPost != 'admins'
+                  || hasGroupPermission(groupId, 'send_messages')))
+          );
 
         // Any member may react and vote in polls, so those two fields are
         // writable by members — but nothing else about a message is, which
         // keeps someone from editing another person's text after the fact.
-        allow update: if isGroupAdmin(groupId) || isSchoolAdmin() || (
+        allow update: if hasGroupPermission(groupId, 'manage_messages')
+          || isSchoolAdmin() || (
           isMember(groupId)
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['reactions', 'poll'])
         );
 
-        allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+        allow delete: if hasGroupPermission(groupId, 'manage_messages')
+          || isSchoolAdmin();
       }
 
       // --------------------------------------------------------- events
       match /events/{eventId} {
         allow read: if isMember(groupId) || isSchoolAdmin();
-        allow create, update, delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+        allow create, delete:
+          if hasGroupPermission(groupId, 'manage_events') || isSchoolAdmin();
+        allow update: if hasGroupPermission(groupId, 'manage_events')
+          || (hasGroupPermission(groupId, 'manage_check_ins')
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly([
+                   'checkInEnabled', 'checkInOpensAt', 'checkInClosesAt'
+                 ]))
+          || isSchoolAdmin();
 
         // ----------------------------------------------------- checkIns
         // The security-critical part. A check-in may only be written by an
@@ -143,7 +185,7 @@ service cloud.firestore {
           // Members can see who is present; the roster is not a secret.
           allow read: if isMember(groupId) || isSchoolAdmin();
 
-          allow create: if isGroupAdmin(groupId)
+          allow create: if hasGroupPermission(groupId, 'manage_check_ins')
             && checkInOpen()
             // The person being checked in must belong to this club.
             && request.resource.data.email in groupData(groupId).members
@@ -159,7 +201,8 @@ service cloud.firestore {
           // Attendance is append-only. Corrections are a delete by an admin,
           // which leaves no way to silently rewrite a record.
           allow update: if false;
-          allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+          allow delete: if hasGroupPermission(groupId, 'manage_check_ins')
+            || isSchoolAdmin();
         }
       }
     }

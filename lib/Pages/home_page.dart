@@ -103,9 +103,7 @@ class _HomePageState extends State<HomePage> {
     return DateTime.utc(day.year, day.month, day.day);
   }
 
-  /// Open attendance for an event. Admin status is read from the group's
-  /// admins list so that the switch and scanner only show for officers; the
-  /// Cloud Function re-checks it on every write regardless.
+  /// The Cloud Function re-checks attendance permission on every write.
   Future<void> _openAttendance(_CalendarEvent event) async {
     if (event.id.isEmpty) return;
 
@@ -117,9 +115,13 @@ class _HomePageState extends State<HomePage> {
           .doc(event.groupId)
           .get();
       final data = groupDoc.data();
-      final admins = List<String>.from(data?['admins'] ?? const []);
       isAdmin = email != null &&
-          (admins.contains(email) || data?['createdBy'] == email);
+          data != null &&
+          _chatService.hasGroupPermission(
+            data,
+            email,
+            'manage_check_ins',
+          );
     } catch (_) {
       // Fall through as a non-admin: the roster is still worth showing.
     }

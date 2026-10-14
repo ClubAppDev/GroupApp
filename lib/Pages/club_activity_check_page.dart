@@ -100,23 +100,28 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
     final freshnessScore = daysSinceLastMessage <= 1
         ? 10.0
         : daysSinceLastMessage <= 3
-            ? 8.0
-            : daysSinceLastMessage <= 7
-                ? 5.0
-                : daysSinceLastMessage <= 14
-                    ? 2.0
-                    : 0.0;
+        ? 8.0
+        : daysSinceLastMessage <= 7
+        ? 5.0
+        : daysSinceLastMessage <= 14
+        ? 2.0
+        : 0.0;
 
-    final activityScore = (volumeScore + participationScore + eventScore + freshnessScore)
-        .round()
-        .clamp(0, 100);
+    final activityScore =
+        (volumeScore + participationScore + eventScore + freshnessScore)
+            .round()
+            .clamp(0, 100);
 
     final sortedContributors = senderCounts30d.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final topContributors = sortedContributors.take(3).toList();
 
-    final highestSenderCount = topContributors.isEmpty ? 0 : topContributors.first.value;
-    final highestSenderShare = messages30d == 0 ? 0.0 : highestSenderCount / messages30d;
+    final highestSenderCount = topContributors.isEmpty
+        ? 0
+        : topContributors.first.value;
+    final highestSenderShare = messages30d == 0
+        ? 0.0
+        : highestSenderCount / messages30d;
 
     final riskFlags = <String>[];
     if (memberCount >= 10 && messages30d < 8) {
@@ -216,9 +221,7 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
 
           final groups = snapshot.data?.docs ?? [];
           if (groups.isEmpty) {
-            return const Center(
-              child: Text('No clubs found yet.'),
-            );
+            return const Center(child: Text('No clubs found yet.'));
           }
 
           return ListView(
@@ -241,9 +244,12 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
 
                 final groupId = doc.id;
                 final name = (data['name'] as String?) ?? 'Unnamed Club';
-                final members = List<String>.from(data['members'] ?? const <String>[]);
+                final members = List<String>.from(
+                  data['members'] ?? const <String>[],
+                );
                 final isPublic = data['isPublic'] as bool? ?? false;
-                final requestStatus = (data['publicRequestStatus'] as String?) ?? 'none';
+                final requestStatus =
+                    (data['publicRequestStatus'] as String?) ?? 'none';
                 final whoCanPost = (data['whoCanPost'] as String?) ?? 'all';
                 final createdBy = (data['createdBy'] as String?) ?? 'Unknown';
 
@@ -263,7 +269,9 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                 return FutureBuilder<_ClubAuditSnapshot>(
                   future: _buildClubAuditSnapshot(groupId, members.length),
                   builder: (context, auditSnapshot) {
-                    final loading = auditSnapshot.connectionState == ConnectionState.waiting;
+                    final loading =
+                        auditSnapshot.connectionState ==
+                        ConnectionState.waiting;
                     final audit = auditSnapshot.data;
 
                     return InkWell(
@@ -271,16 +279,16 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                       onTap: audit == null
                           ? null
                           : () => _openClubAuditDetails(
-                                context,
-                                clubName: name,
-                                createdBy: createdBy,
-                                memberCount: members.length,
-                                visibilityStatus: statusLabel,
-                                postingPolicy: whoCanPost == 'admins'
-                                    ? 'Admins only'
-                                    : 'All members',
-                                audit: audit,
-                              ),
+                              context,
+                              clubName: name,
+                              createdBy: createdBy,
+                              memberCount: members.length,
+                              visibilityStatus: statusLabel,
+                              postingPolicy: whoCanPost == 'admins'
+                                  ? 'Members with posting permission'
+                                  : 'All members',
+                              audit: audit,
+                            ),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(14),
@@ -296,18 +304,27 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                                 Expanded(
                                   child: Text(
                                     name,
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: statusColor.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
                                     statusLabel,
-                                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -317,7 +334,9 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                             const SizedBox(height: 2),
                             Text('Members: ${members.length}'),
                             const SizedBox(height: 2),
-                            Text('Posting policy: ${whoCanPost == 'admins' ? 'Admins only' : 'All members'}'),
+                            Text(
+                              'Posting policy: ${whoCanPost == 'admins' ? 'Members with posting permission' : 'All members'}',
+                            ),
                             const SizedBox(height: 10),
                             if (loading)
                               const LinearProgressIndicator()
@@ -326,7 +345,9 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                                 children: [
                                   Text(
                                     'Activity Score: ${audit.activityScore}/100',
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   const SizedBox(width: 10),
                                   if (audit.riskFlags.isNotEmpty)
@@ -352,20 +373,39 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
                                 spacing: 10,
                                 runSpacing: 8,
                                 children: [
-                                  _MetricChip(label: 'Msgs 7d', value: '${audit.messages7d}'),
-                                  _MetricChip(label: 'Msgs 30d', value: '${audit.messages30d}'),
-                                  _MetricChip(label: 'Active Senders', value: '${audit.uniqueSenders30d}'),
-                                  _MetricChip(label: 'Events 90d', value: '${audit.events90d}'),
-                                  _MetricChip(label: 'Upcoming 30d', value: '${audit.upcomingEvents30d}'),
+                                  _MetricChip(
+                                    label: 'Msgs 7d',
+                                    value: '${audit.messages7d}',
+                                  ),
+                                  _MetricChip(
+                                    label: 'Msgs 30d',
+                                    value: '${audit.messages30d}',
+                                  ),
+                                  _MetricChip(
+                                    label: 'Active Senders',
+                                    value: '${audit.uniqueSenders30d}',
+                                  ),
+                                  _MetricChip(
+                                    label: 'Events 90d',
+                                    value: '${audit.events90d}',
+                                  ),
+                                  _MetricChip(
+                                    label: 'Upcoming 30d',
+                                    value: '${audit.upcomingEvents30d}',
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'Tap this club card to view in-depth activity tracking.',
-                                style: TextStyle(color: colorScheme.onSurfaceVariant),
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ] else
-                              const Text('Unable to compute activity snapshot.'),
+                              const Text(
+                                'Unable to compute activity snapshot.',
+                              ),
                           ],
                         ),
                       ),
@@ -399,7 +439,10 @@ class _MetricChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          Text(
+            '$label: ',
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
@@ -422,7 +465,9 @@ class _AuditRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -508,7 +553,10 @@ class _ClubAuditDetailPage extends StatelessWidget {
               children: [
                 Text(
                   'Activity Score: ${audit.activityScore}/100',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
@@ -521,9 +569,19 @@ class _ClubAuditDetailPage extends StatelessWidget {
                 _AuditRow(label: 'Members', value: '$memberCount'),
                 _AuditRow(label: 'Visibility', value: visibilityStatus),
                 _AuditRow(label: 'Posting policy', value: postingPolicy),
-                _AuditRow(label: 'Participation ratio (30d)', value: '${(audit.participationRatio * 100).toStringAsFixed(1)}%'),
-                _AuditRow(label: 'Last message', value: formatDate(audit.lastMessageAt)),
-                _AuditRow(label: 'Last event', value: formatDate(audit.lastEventAt)),
+                _AuditRow(
+                  label: 'Participation ratio (30d)',
+                  value:
+                      '${(audit.participationRatio * 100).toStringAsFixed(1)}%',
+                ),
+                _AuditRow(
+                  label: 'Last message',
+                  value: formatDate(audit.lastMessageAt),
+                ),
+                _AuditRow(
+                  label: 'Last event',
+                  value: formatDate(audit.lastEventAt),
+                ),
               ],
             ),
           ),
@@ -547,10 +605,22 @@ class _ClubAuditDetailPage extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _MetricChip(label: 'Msgs 7d', value: '${audit.messages7d}'),
-                    _MetricChip(label: 'Msgs 30d', value: '${audit.messages30d}'),
-                    _MetricChip(label: 'Active Senders', value: '${audit.uniqueSenders30d}'),
-                    _MetricChip(label: 'Events 90d', value: '${audit.events90d}'),
-                    _MetricChip(label: 'Upcoming 30d', value: '${audit.upcomingEvents30d}'),
+                    _MetricChip(
+                      label: 'Msgs 30d',
+                      value: '${audit.messages30d}',
+                    ),
+                    _MetricChip(
+                      label: 'Active Senders',
+                      value: '${audit.uniqueSenders30d}',
+                    ),
+                    _MetricChip(
+                      label: 'Events 90d',
+                      value: '${audit.events90d}',
+                    ),
+                    _MetricChip(
+                      label: 'Upcoming 30d',
+                      value: '${audit.upcomingEvents30d}',
+                    ),
                   ],
                 ),
               ],
@@ -580,7 +650,9 @@ class _ClubAuditDetailPage extends StatelessWidget {
                   ...audit.topContributors.map(
                     (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text('${displayNameFromEmail(entry.key)}: ${entry.value} messages'),
+                      child: Text(
+                        '${displayNameFromEmail(entry.key)}: ${entry.value} messages',
+                      ),
                     ),
                   ),
               ],
@@ -606,12 +678,17 @@ class _ClubAuditDetailPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 if (audit.riskFlags.isEmpty)
-                  const Text('No suspicious activity signals detected from current records.')
+                  const Text(
+                    'No suspicious activity signals detected from current records.',
+                  )
                 else
                   ...audit.riskFlags.map(
                     (flag) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text('• $flag', style: const TextStyle(color: Color(0xFFC62828))),
+                      child: Text(
+                        '• $flag',
+                        style: const TextStyle(color: Color(0xFFC62828)),
+                      ),
                     ),
                   ),
               ],
