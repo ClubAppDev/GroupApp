@@ -220,8 +220,9 @@ service cloud.firestore {
       match /clubDays/{dateKey} {
         // Members can see their club's attendance; school admins see any.
         allow read: if isMember(groupId) || isSchoolAdmin();
-        // Only officers start, reopen or close a club day.
-        allow create, update: if isGroupAdmin(groupId) || isSchoolAdmin();
+        // Only roles with manage_check_ins start, reopen or close a day.
+        allow create, update: if hasGroupPermission(groupId, 'manage_check_ins')
+          || isSchoolAdmin();
         allow delete: if isSchoolAdmin();
 
         match /checkIns/{memberUid} {
@@ -236,7 +237,7 @@ service cloud.firestore {
           // Only a club admin may write a row, only while the day is open,
           // only for someone who belongs to the club, and only with a
           // server timestamp and their own name as the scanner.
-          allow create: if isGroupAdmin(groupId)
+          allow create: if hasGroupPermission(groupId, 'manage_check_ins')
             && dayIsOpen()
             && request.resource.data.email in groupData(groupId).members
             && request.resource.data.uid == memberUid
@@ -247,7 +248,8 @@ service cloud.firestore {
           // Attendance is append-only. A correction is a delete by an
           // admin, so a record can never be quietly rewritten.
           allow update: if false;
-          allow delete: if isGroupAdmin(groupId) || isSchoolAdmin();
+          allow delete: if hasGroupPermission(groupId, 'manage_check_ins')
+            || isSchoolAdmin();
         }
       }
     }
