@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:login_ui/services/auth_service.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/components/skeleton_loader.dart';
+import '../theme/app_theme.dart';
 
 class AdminActivityPage extends StatefulWidget {
   final bool bypassAccessCheck;
 
-  const AdminActivityPage({
-    super.key,
-    this.bypassAccessCheck = false,
-  });
+  const AdminActivityPage({super.key, this.bypassAccessCheck = false});
 
   @override
   State<AdminActivityPage> createState() => _AdminActivityPageState();
@@ -45,7 +43,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
     {
       'name': 'Environmental Action Crew',
       'createdBy': 'ecoadvisor@school.edu',
-      'overview': 'Recycling drives, clean-up events, and sustainability campaigns.',
+      'overview':
+          'Recycling drives, clean-up events, and sustainability campaigns.',
       'members': '27',
       'keywords': 'Environment, Service, Sustainability',
     },
@@ -116,9 +115,9 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error reviewing club: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error reviewing club: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -146,7 +145,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                 minLines: 2,
                 maxLines: 4,
                 decoration: const InputDecoration(
-                  hintText: 'Example: Please add a staff advisor and clear activity plan.',
+                  hintText:
+                      'Example: Please add a staff advisor and clear activity plan.',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -158,7 +158,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(dialogContext).pop(reasonController.text.trim()),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(reasonController.text.trim()),
               child: const Text('Submit Reject'),
             ),
           ],
@@ -218,6 +219,7 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          flexibleSpace: const GradientAppBarBackground(),
           backgroundColor: colorScheme.primary,
           iconTheme: IconThemeData(color: colorScheme.onPrimary),
           title: Text(
@@ -280,7 +282,10 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
 
         if (accessSnapshot.data != true) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Club Activity')),
+            appBar: AppBar(
+              flexibleSpace: const GradientAppBarBackground(),
+              title: const Text('Club Activity'),
+            ),
             body: const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -296,6 +301,7 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
+            flexibleSpace: const GradientAppBarBackground(),
             backgroundColor: colorScheme.primary,
             iconTheme: IconThemeData(color: colorScheme.onPrimary),
             title: Text(
@@ -306,7 +312,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
           body: StreamBuilder<QuerySnapshot>(
             stream: _chatService.getAllGroupsForAdmin(),
             builder: (context, allGroupsSnapshot) {
-              if (allGroupsSnapshot.connectionState == ConnectionState.waiting) {
+              if (allGroupsSnapshot.connectionState ==
+                  ConnectionState.waiting) {
                 return const SkeletonList();
               }
 
@@ -317,7 +324,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
               final groups = allGroupsSnapshot.data?.docs ?? [];
               final pendingCount = groups.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                return (data['publicRequestStatus'] as String? ?? 'none') == 'pending';
+                return (data['publicRequestStatus'] as String? ?? 'none') ==
+                    'pending';
               }).length;
               final publicCount = groups.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
@@ -328,12 +336,15 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
               return StreamBuilder<QuerySnapshot>(
                 stream: _chatService.getPendingPublicApprovalGroups(),
                 builder: (context, pendingSnapshot) {
-                  if (pendingSnapshot.connectionState == ConnectionState.waiting) {
+                  if (pendingSnapshot.connectionState ==
+                      ConnectionState.waiting) {
                     return const SkeletonList();
                   }
 
                   if (pendingSnapshot.hasError) {
-                    return Center(child: Text('Error: ${pendingSnapshot.error}'));
+                    return Center(
+                      child: Text('Error: ${pendingSnapshot.error}'),
+                    );
                   }
 
                   final pendingGroups = pendingSnapshot.data?.docs ?? [];
@@ -377,12 +388,17 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                           children: [
                             const Text(
                               'Pending Public Approval',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 6),
                             Text(
                               'Approve clubs here before they appear in Discover and Search for students to join.',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             if (pendingGroups.isEmpty)
@@ -391,15 +407,25 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                 children: [
                                   Text(
                                     'No live requests yet. Demo requests are shown below.',
-                                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                                    style: TextStyle(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
-                                  ..._demoPendingApprovals.asMap().entries.map((entry) {
+                                  ..._demoPendingApprovals.asMap().entries.map((
+                                    entry,
+                                  ) {
                                     final index = entry.key;
                                     final demo = entry.value;
-                                    final keywordList = demo['keywords']!.split(',').map((e) => e.trim()).toList();
-                                    final isReviewingDemo = _demoReviewing[index] == true;
-                                    final demoStatus = _demoReviewStatus[index] ?? 'pending';
-                                    final demoRejectionReason = _demoRejectionReason[index];
+                                    final keywordList = demo['keywords']!
+                                        .split(',')
+                                        .map((e) => e.trim())
+                                        .toList();
+                                    final isReviewingDemo =
+                                        _demoReviewing[index] == true;
+                                    final demoStatus =
+                                        _demoReviewStatus[index] ?? 'pending';
+                                    final demoRejectionReason =
+                                        _demoRejectionReason[index];
                                     return Container(
                                       margin: const EdgeInsets.only(top: 12),
                                       padding: const EdgeInsets.all(14),
@@ -408,7 +434,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -422,27 +449,43 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                                 ),
                                               ),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color: demoStatus == 'approved'
+                                                  color:
+                                                      demoStatus == 'approved'
                                                       ? const Color(0xFFE8F5E9)
                                                       : demoStatus == 'rejected'
-                                                          ? const Color(0xFFFFEBEE)
-                                                          : const Color(0xFFFFF3E0),
-                                                  borderRadius: BorderRadius.circular(999),
+                                                      ? const Color(0xFFFFEBEE)
+                                                      : const Color(0xFFFFF3E0),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
                                                 ),
                                                 child: Text(
                                                   demoStatus == 'approved'
                                                       ? 'Approved'
                                                       : demoStatus == 'rejected'
-                                                          ? 'Rejected'
-                                                          : 'Pending',
+                                                      ? 'Rejected'
+                                                      : 'Pending',
                                                   style: TextStyle(
-                                                    color: demoStatus == 'approved'
-                                                        ? const Color(0xFF2E7D32)
-                                                        : demoStatus == 'rejected'
-                                                            ? const Color(0xFFC62828)
-                                                            : const Color(0xFFF57F17),
+                                                    color:
+                                                        demoStatus == 'approved'
+                                                        ? const Color(
+                                                            0xFF2E7D32,
+                                                          )
+                                                        : demoStatus ==
+                                                              'rejected'
+                                                        ? const Color(
+                                                            0xFFC62828,
+                                                          )
+                                                        : const Color(
+                                                            0xFFF57F17,
+                                                          ),
                                                     fontWeight: FontWeight.w700,
                                                   ),
                                                 ),
@@ -450,35 +493,60 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Text('Created by ${demo['createdBy']}'),
+                                          Text(
+                                            'Created by ${demo['createdBy']}',
+                                          ),
                                           const SizedBox(height: 4),
                                           Text('${demo['members']} members'),
                                           const SizedBox(height: 8),
                                           Text(
                                             demo['overview']!,
-                                            style: TextStyle(color: colorScheme.onSurfaceVariant),
+                                            style: TextStyle(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
                                           ),
                                           const SizedBox(height: 10),
                                           Wrap(
                                             spacing: 6,
                                             runSpacing: 6,
-                                            children: keywordList.map((keyword) => Chip(label: Text(keyword))).toList(),
+                                            children: keywordList
+                                                .map(
+                                                  (keyword) => Chip(
+                                                    label: Text(keyword),
+                                                  ),
+                                                )
+                                                .toList(),
                                           ),
                                           const SizedBox(height: 12),
                                           Row(
                                             children: [
                                               Expanded(
                                                 child: OutlinedButton(
-                                                  onPressed: isReviewingDemo || demoStatus != 'pending'
+                                                  onPressed:
+                                                      isReviewingDemo ||
+                                                          demoStatus !=
+                                                              'pending'
                                                       ? null
                                                       : () async {
-                                                          final reason = await _promptRejectionReason(demo['name']!);
-                                                          if (reason == null) return;
-                                                          if (reason.trim().isEmpty) {
-                                                            if (!mounted) return;
-                                                            ScaffoldMessenger.of(this.context).showSnackBar(
+                                                          final reason =
+                                                              await _promptRejectionReason(
+                                                                demo['name']!,
+                                                              );
+                                                          if (reason == null)
+                                                            return;
+                                                          if (reason
+                                                              .trim()
+                                                              .isEmpty) {
+                                                            if (!mounted)
+                                                              return;
+                                                            ScaffoldMessenger.of(
+                                                              this.context,
+                                                            ).showSnackBar(
                                                               const SnackBar(
-                                                                content: Text('Enter a rejection reason for the club owner.'),
+                                                                content: Text(
+                                                                  'Enter a rejection reason for the club owner.',
+                                                                ),
                                                               ),
                                                             );
                                                             return;
@@ -486,46 +554,58 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                                           await _reviewDemoGroup(
                                                             index,
                                                             approve: false,
-                                                            rejectionReason: reason,
+                                                            rejectionReason:
+                                                                reason,
                                                           );
                                                         },
-                                                  style: OutlinedButton.styleFrom(
-                                                    foregroundColor: Colors.red,
-                                                  ),
+                                                  style:
+                                                      OutlinedButton.styleFrom(
+                                                        foregroundColor:
+                                                            Colors.red,
+                                                      ),
                                                   child: const Text('Reject'),
                                                 ),
                                               ),
                                               const SizedBox(width: 10),
                                               Expanded(
                                                 child: ElevatedButton(
-                                                  onPressed: isReviewingDemo || demoStatus != 'pending'
+                                                  onPressed:
+                                                      isReviewingDemo ||
+                                                          demoStatus !=
+                                                              'pending'
                                                       ? null
                                                       : () => _reviewDemoGroup(
-                                                            index,
-                                                            approve: true,
-                                                          ),
+                                                          index,
+                                                          approve: true,
+                                                        ),
                                                   child: isReviewingDemo
                                                       ? const SizedBox(
                                                           width: 16,
                                                           height: 16,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color: Colors.white,
-                                                          ),
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
                                                         )
-                                                      : const Text('Approve Public'),
+                                                      : const Text(
+                                                          'Approve Public',
+                                                        ),
                                                 ),
                                               ),
                                             ],
                                           ),
-                                          if (demoStatus == 'rejected' && demoRejectionReason != null) ...[
+                                          if (demoStatus == 'rejected' &&
+                                              demoRejectionReason != null) ...[
                                             const SizedBox(height: 10),
                                             Container(
                                               width: double.infinity,
                                               padding: const EdgeInsets.all(10),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFFFEBEE),
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                               ),
                                               child: Text(
                                                 'Owner-visible rejection reason: $demoRejectionReason',
@@ -546,11 +626,18 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                               ...pendingGroups.map((doc) {
                                 final data = doc.data() as Map<String, dynamic>;
                                 final groupId = doc.id;
-                                final name = (data['name'] as String?) ?? 'Unnamed Club';
-                                final overview = (data['overview'] as String?) ?? '';
-                                final createdBy = (data['createdBy'] as String?) ?? 'Unknown';
-                                final keywords = List<String>.from(data['keywords'] ?? const <String>[]);
-                                final members = List<String>.from(data['members'] ?? const <String>[]);
+                                final name =
+                                    (data['name'] as String?) ?? 'Unnamed Club';
+                                final overview =
+                                    (data['overview'] as String?) ?? '';
+                                final createdBy =
+                                    (data['createdBy'] as String?) ?? 'Unknown';
+                                final keywords = List<String>.from(
+                                  data['keywords'] ?? const <String>[],
+                                );
+                                final members = List<String>.from(
+                                  data['members'] ?? const <String>[],
+                                );
                                 final isReviewing = _reviewing[groupId] == true;
 
                                 return Container(
@@ -561,7 +648,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -581,7 +669,8 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFFFFF3E0),
-                                              borderRadius: BorderRadius.circular(999),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
                                             ),
                                             child: const Text(
                                               'Pending',
@@ -601,7 +690,9 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                         const SizedBox(height: 8),
                                         Text(
                                           overview,
-                                          style: TextStyle(color: colorScheme.onSurfaceVariant),
+                                          style: TextStyle(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
                                         ),
                                       ],
                                       if (keywords.isNotEmpty) ...[
@@ -609,7 +700,9 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                         Wrap(
                                           spacing: 6,
                                           runSpacing: 6,
-                                          children: keywords.take(6).map((keyword) {
+                                          children: keywords.take(6).map((
+                                            keyword,
+                                          ) {
                                             return Chip(label: Text(keyword));
                                           }).toList(),
                                         ),
@@ -622,13 +715,23 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                               onPressed: isReviewing
                                                   ? null
                                                   : () async {
-                                                      final reason = await _promptRejectionReason(name);
-                                                      if (reason == null) return;
-                                                      if (reason.trim().isEmpty) {
+                                                      final reason =
+                                                          await _promptRejectionReason(
+                                                            name,
+                                                          );
+                                                      if (reason == null)
+                                                        return;
+                                                      if (reason
+                                                          .trim()
+                                                          .isEmpty) {
                                                         if (!mounted) return;
-                                                        ScaffoldMessenger.of(this.context).showSnackBar(
+                                                        ScaffoldMessenger.of(
+                                                          this.context,
+                                                        ).showSnackBar(
                                                           const SnackBar(
-                                                            content: Text('Enter a rejection reason for the club owner.'),
+                                                            content: Text(
+                                                              'Enter a rejection reason for the club owner.',
+                                                            ),
                                                           ),
                                                         );
                                                         return;
@@ -651,19 +754,22 @@ class _AdminActivityPageState extends State<AdminActivityPage> {
                                               onPressed: isReviewing
                                                   ? null
                                                   : () => _reviewGroup(
-                                                        groupId,
-                                                        approve: true,
-                                                      ),
+                                                      groupId,
+                                                      approve: true,
+                                                    ),
                                               child: isReviewing
                                                   ? const SizedBox(
                                                       width: 16,
                                                       height: 16,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color: Colors.white,
-                                                      ),
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                            color: Colors.white,
+                                                          ),
                                                     )
-                                                  : const Text('Approve Public'),
+                                                  : const Text(
+                                                      'Approve Public',
+                                                    ),
                                             ),
                                           ),
                                         ],

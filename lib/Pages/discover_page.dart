@@ -135,42 +135,26 @@ class DiscoverPage extends StatelessWidget {
       ),
       body: NeonBackground(
         child: StreamBuilder<QuerySnapshot>(
-        stream: chatService.getPublicGroups(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SkeletonList();
-          }
+          stream: chatService.getPublicGroups(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SkeletonList();
+            }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
 
-          final docs = snapshot.data?.docs ?? [];
+            final docs = snapshot.data?.docs ?? [];
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // ── Demo / placeholder clubs ──
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Featured Clubs',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              ...demoClubs.map((club) => DemoClubCard(club: club)),
-
-              // ── Live clubs from Firestore ──
-              if (docs.isNotEmpty) ...[
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── Demo / placeholder clubs ──
                 Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 10),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
-                    'All Clubs',
+                    'Featured Clubs',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -179,19 +163,35 @@ class DiscoverPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                ...docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return ClubCard(
-                    groupId: doc.id,
-                    data: data,
-                    chatService: chatService,
-                  );
-                }),
+                ...demoClubs.map((club) => DemoClubCard(club: club)),
+
+                // ── Live clubs from Firestore ──
+                if (docs.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 10),
+                    child: Text(
+                      'All Clubs',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  ...docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    return ClubCard(
+                      groupId: doc.id,
+                      data: data,
+                      chatService: chatService,
+                    );
+                  }),
+                ],
               ],
-            ],
-          );
-        },
-      ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -202,11 +202,7 @@ class DemoClubCard extends StatefulWidget {
   final DemoClub club;
   final String? matchedKeyword;
 
-  const DemoClubCard({
-    super.key,
-    required this.club,
-    this.matchedKeyword,
-  });
+  const DemoClubCard({super.key, required this.club, this.matchedKeyword});
 
   @override
   State<DemoClubCard> createState() => _DemoClubCardState();
@@ -297,9 +293,9 @@ class _DemoClubCardState extends State<DemoClubCard> {
                         label: 'Recommended: ${widget.matchedKeyword}',
                         emphasize: true,
                       ),
-                    ...club.keywords.take(2).map(
-                      (keyword) => _KeywordPill(label: keyword),
-                    ),
+                    ...club.keywords
+                        .take(2)
+                        .map((keyword) => _KeywordPill(label: keyword)),
                   ],
                 ),
               ),
@@ -466,7 +462,9 @@ class ClubCard extends StatelessWidget {
                     label: 'Recommended: $matchedKeyword',
                     emphasize: true,
                   ),
-                ...keywords.take(3).map((keyword) => _KeywordPill(label: keyword)),
+                ...keywords
+                    .take(3)
+                    .map((keyword) => _KeywordPill(label: keyword)),
               ],
             ),
           ),
@@ -592,10 +590,7 @@ class _KeywordPill extends StatelessWidget {
   final String label;
   final bool emphasize;
 
-  const _KeywordPill({
-    required this.label,
-    this.emphasize = false,
-  });
+  const _KeywordPill({required this.label, this.emphasize = false});
 
   @override
   Widget build(BuildContext context) {

@@ -131,7 +131,8 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isMember(groupId) || isSchoolAdmin();
         allow create: if isMember(groupId)
-          && request.resource.data.senderEmail == myEmail()
+          && (request.resource.data.senderEmail == myEmail()
+              || request.resource.data.senderEmail == 'jarvis@assistant.ai')
           && (
             (request.resource.data.type == 'event'
               && hasGroupPermission(groupId, 'manage_events'))
@@ -254,13 +255,47 @@ service cloud.firestore {
       }
     }
 
+    // --------------------------------------------------------- friendships
+    // One document per pair, id = both emails sorted and joined by '|'.
+    // That shape is what lets these rules be short: there is no way to hold
+    // two competing requests, and "who may accept" is a field comparison.
+    match /friendships/{pairKey} {
+      // resource is null for a document that does not exist; without that
+      // guard, checking "is there already a request?" is itself denied.
+      allow read: if signedIn()
+        && (resource == null || myEmail() in resource.data.users);
+
+      // You may only create a request you are part of, only as the sender,
+      // and only in the pending state.
+      allow create: if signedIn()
+        && myEmail() in request.resource.data.users
+        && request.resource.data.users.size() == 2
+        && request.resource.data.requestedBy == myEmail()
+        && request.resource.data.status == 'pending';
+
+      // Only the recipient answers, and only the answer may change. The
+      // sender cannot accept on the other person's behalf.
+      allow update: if signedIn()
+        && myEmail() in resource.data.users
+        && resource.data.requestedBy != myEmail()
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'respondedAt']);
+
+      // Either side can walk away: cancelling a request you sent and
+      // unfriending are the same act.
+      allow delete: if signedIn() && myEmail() in resource.data.users;
+    }
+
     // ------------------------------------------------------ direct messages
     match /directMessages/{threadId} {
       function participants() {
         return resource.data.participants;
       }
 
-      allow read: if signedIn() && myEmail() in participants();
+      allow read: if signedIn()
+        && (resource == null || myEmail() in participants());
       allow create: if signedIn()
         && myEmail() in request.resource.data.participants;
       allow update: if signedIn() && myEmail() in participants();
@@ -273,10 +308,19 @@ service cloud.firestore {
         }
 
         allow read: if signedIn() && myEmail() in threadParticipants();
+        // As in a group room, an @jarvis reply is written by the asking
+        // participant's client on the bot's behalf.
         allow create: if signedIn()
           && myEmail() in threadParticipants()
-          && request.resource.data.senderEmail == myEmail();
-        allow update, delete: if false;
+          && (request.resource.data.senderEmail == myEmail()
+              || request.resource.data.senderEmail == 'jarvis@assistant.ai');
+        // Reactions are the only edit a participant may make; the message
+        // text itself stays immutable.
+        allow update: if signedIn()
+          && myEmail() in threadParticipants()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['reactions']);
+        allow delete: if false;
       }
     }
   }

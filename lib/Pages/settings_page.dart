@@ -47,7 +47,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _profilePictureUrl = profilePic;
         _firstNameController.text = userData?['firstName'] ?? '';
         _lastNameController.text = userData?['lastName'] ?? '';
-        _interests = List<String>.from(userData?['interests'] ?? const <String>[]);
+        _interests = List<String>.from(
+          userData?['interests'] ?? const <String>[],
+        );
         _isLoading = false;
       });
     }
@@ -75,17 +77,17 @@ class _SettingsPageState extends State<SettingsPage> {
         _isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Interests updated!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Interests updated!')));
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating interests: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating interests: $e')));
     }
   }
 
@@ -229,7 +231,11 @@ class _SettingsPageState extends State<SettingsPage> {
                           ? NetworkImage(_profilePictureUrl!)
                           : null,
                       child: _profilePictureUrl == null
-                          ? Icon(Icons.person, size: 44, color: cs.onSurfaceVariant)
+                          ? Icon(
+                              Icons.person,
+                              size: 44,
+                              color: cs.onSurfaceVariant,
+                            )
                           : null,
                     ),
                     if (_isSaving)
@@ -240,7 +246,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             shape: BoxShape.circle,
                           ),
                           child: const Center(
-                            child: CircularProgressIndicator(color: Colors.white),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -254,8 +262,11 @@ class _SettingsPageState extends State<SettingsPage> {
                           shape: BoxShape.circle,
                           border: Border.all(color: cs.surface, width: 2),
                         ),
-                        child: const Icon(Icons.camera_alt,
-                            color: AppColors.navy, size: 15),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          color: AppColors.navy,
+                          size: 15,
+                        ),
                       ),
                     ),
                   ],
@@ -290,8 +301,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               if (handle.isNotEmpty)
-                Text('@$handle',
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+                Text(
+                  '@$handle',
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                ),
             ],
           ),
         ),
@@ -328,13 +341,15 @@ class _SettingsPageState extends State<SettingsPage> {
               spacing: 8,
               runSpacing: 8,
               children: _interests
-                  .map((i) => Chip(
-                        label: Text(i),
-                        backgroundColor:
-                            AppColors.brass.withValues(alpha: 0.14),
-                        side: BorderSide(
-                            color: AppColors.brass.withValues(alpha: 0.4)),
-                      ))
+                  .map(
+                    (i) => Chip(
+                      label: Text(i),
+                      backgroundColor: AppColors.brass.withValues(alpha: 0.14),
+                      side: BorderSide(
+                        color: AppColors.brass.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -347,8 +362,8 @@ class _SettingsPageState extends State<SettingsPage> {
           label: 'Dark Mode',
           trailing: Switch(
             value: ThemeService.isDark,
-            onChanged: (v) => ThemeService.setThemeMode(
-                v ? ThemeMode.dark : ThemeMode.light),
+            onChanged: (v) =>
+                ThemeService.setThemeMode(v ? ThemeMode.dark : ThemeMode.light),
           ),
         ),
         _settingsRow(
@@ -383,18 +398,25 @@ class _SettingsPageState extends State<SettingsPage> {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Text(value,
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: cs.onSurface,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       ],
     );
   }
 
-  Widget _profileButton(BuildContext context,
-      {required String label, VoidCallback? onTap}) {
+  Widget _profileButton(
+    BuildContext context, {
+    required String label,
+    VoidCallback? onTap,
+  }) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 34,
@@ -404,10 +426,14 @@ class _SettingsPageState extends State<SettingsPage> {
           foregroundColor: cs.onSurface,
           side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
           padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
-        child: Text(label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -426,13 +452,19 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListTile(
       onTap: onTap,
       leading: Icon(icon, color: danger ? Colors.red : cs.onSurfaceVariant),
-      title: Text(label,
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.w600, fontSize: 15)),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+        ),
+      ),
       subtitle: subtitle != null && subtitle.isNotEmpty
           ? Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant))
           : null,
-      trailing: trailing ??
+      trailing:
+          trailing ??
           (onTap != null && !danger
               ? Icon(Icons.chevron_right, color: cs.onSurfaceVariant)
               : null),
@@ -472,8 +504,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Edit Profile',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const Text(
+                'Edit Profile',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: _firstNameController,

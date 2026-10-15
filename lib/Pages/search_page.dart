@@ -108,9 +108,9 @@ class _SearchPageState extends State<SearchPage> {
       final data = doc.data() as Map<String, dynamic>;
       final name = (data['name'] ?? '').toString().toLowerCase();
       final overview = (data['overview'] ?? '').toString().toLowerCase();
-      final keywords = List<String>.from(data['keywords'] ?? const <String>[])
-          .map((value) => value.toLowerCase())
-          .toList();
+      final keywords = List<String>.from(
+        data['keywords'] ?? const <String>[],
+      ).map((value) => value.toLowerCase()).toList();
       if (name.contains(lowerQuery) ||
           overview.contains(lowerQuery) ||
           keywords.any((keyword) => keyword.contains(lowerQuery))) {
@@ -129,17 +129,16 @@ class _SearchPageState extends State<SearchPage> {
     final ranked = <_RankedClub>[];
 
     for (final club in demoClubs) {
-      final matchKeyword = _firstInterestKeywordMatch(_userInterests, club.keywords);
+      final matchKeyword = _firstInterestKeywordMatch(
+        _userInterests,
+        club.keywords,
+      );
       final score = _recommendationScore(
         memberCount: club.memberCount,
         matchedKeyword: matchKeyword,
       );
       ranked.add(
-        _RankedClub(
-          item: club,
-          matchedKeyword: matchKeyword,
-          score: score,
-        ),
+        _RankedClub(item: club, matchedKeyword: matchKeyword, score: score),
       );
     }
 
@@ -154,11 +153,7 @@ class _SearchPageState extends State<SearchPage> {
       );
 
       ranked.add(
-        _RankedClub(
-          item: doc,
-          matchedKeyword: matchKeyword,
-          score: score,
-        ),
+        _RankedClub(item: doc, matchedKeyword: matchKeyword, score: score),
       );
     }
 
@@ -174,7 +169,10 @@ class _SearchPageState extends State<SearchPage> {
     return keywordBonus + memberCount;
   }
 
-  String? _firstInterestKeywordMatch(List<String> interests, List<String> keywords) {
+  String? _firstInterestKeywordMatch(
+    List<String> interests,
+    List<String> keywords,
+  ) {
     if (interests.isEmpty || keywords.isEmpty) return null;
 
     for (final interest in interests) {
@@ -201,201 +199,233 @@ class _SearchPageState extends State<SearchPage> {
       ),
       body: NeonBackground(
         child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchController,
-              autofocus: false,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'Search for clubs...',
-                hintStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                autofocus: false,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _search('');
-                        },
-                      )
-                    : null,
-                filled: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                decoration: InputDecoration(
+                  hintText: 'Search for clubs...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _search('');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                onChanged: _search,
               ),
-              onChanged: _search,
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DiscoverPage()),
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(16),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DiscoverPage()),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.explore,
+                          color: Colors.white,
+                          size: 26,
+                        ),
                       ),
-                      child: const Icon(Icons.explore, color: Colors.white, size: 26),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Discover Clubs',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Browse all public clubs open to join',
-                            style: TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.only(top: 32),
-                child: CircularProgressIndicator(),
-              )
-            else if (_query.isNotEmpty)
-              Expanded(
-                child: _results.isEmpty
-                    ? Center(
+                      const SizedBox(width: 14),
+                      const Expanded(
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 12),
                             Text(
-                              'No clubs found for "$_query"',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+                              'Discover Clubs',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Browse all public clubs open to join',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _results.length,
-                        itemBuilder: (context, index) {
-                          final item = _results[index];
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white54,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 32),
+                  child: CircularProgressIndicator(),
+                )
+              else if (_query.isNotEmpty)
+                Expanded(
+                  child: _results.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No clubs found for "$_query"',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _results.length,
+                          itemBuilder: (context, index) {
+                            final item = _results[index];
 
-                          if (item is DemoClub) {
+                            if (item is DemoClub) {
+                              final matched = _firstInterestKeywordMatch(
+                                _userInterests,
+                                item.keywords,
+                              );
+                              return DemoClubCard(
+                                club: item,
+                                matchedKeyword: matched,
+                              );
+                            }
+
+                            final doc = item as QueryDocumentSnapshot;
+                            final data = doc.data() as Map<String, dynamic>;
+                            final currentEmail =
+                                FirebaseAuth.instance.currentUser?.email ?? '';
+                            final members = List<String>.from(
+                              data['members'] ?? [],
+                            );
+                            final isMember = members.contains(currentEmail);
                             final matched = _firstInterestKeywordMatch(
                               _userInterests,
-                              item.keywords,
+                              List<String>.from(
+                                data['keywords'] ?? const <String>[],
+                              ),
                             );
-                            return DemoClubCard(
-                              club: item,
-                              matchedKeyword: matched,
-                            );
-                          }
 
-                          final doc = item as QueryDocumentSnapshot;
-                          final data = doc.data() as Map<String, dynamic>;
-                          final currentEmail = FirebaseAuth.instance.currentUser?.email ?? '';
-                          final members = List<String>.from(data['members'] ?? []);
-                          final isMember = members.contains(currentEmail);
-                          final matched = _firstInterestKeywordMatch(
-                            _userInterests,
-                            List<String>.from(data['keywords'] ?? const <String>[]),
-                          );
-
-                          return GestureDetector(
-                            onTap: isMember
-                                ? () => Navigator.push(
+                            return GestureDetector(
+                              onTap: isMember
+                                  ? () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => ChatRoomPage(
                                           groupId: doc.id,
-                                          groupName: (data['name'] ?? 'Club') as String,
+                                          groupName:
+                                              (data['name'] ?? 'Club')
+                                                  as String,
                                         ),
                                       ),
                                     )
-                                : null,
-                            child: ClubCard(
-                              groupId: doc.id,
-                              data: data,
-                              chatService: _chatService,
-                              matchedKeyword: matched,
+                                  : null,
+                              child: ClubCard(
+                                groupId: doc.id,
+                                data: data,
+                                chatService: _chatService,
+                                matchedKeyword: matched,
+                              ),
+                            );
+                          },
+                        ),
+                )
+              else
+                Expanded(
+                  child: _isLoadingClubs
+                      ? const SkeletonList()
+                      : ListView(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                'Recommended clubs',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          );
-                        },
-                      ),
-              )
-            else
-              Expanded(
-                child: _isLoadingClubs
-                    ? const SkeletonList()
-                    : ListView(
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Recommended clubs',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            Text(
+                              _userInterests.isEmpty
+                                  ? 'Pick interests in Settings to personalize this list.'
+                                  : 'Clubs matching your interests appear first.',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                          ),
-                          Text(
-                            _userInterests.isEmpty
-                                ? 'Pick interests in Settings to personalize this list.'
-                                : 'Clubs matching your interests appear first.',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ...recommended.map((entry) {
-                            if (entry.item is DemoClub) {
-                              return DemoClubCard(
-                                club: entry.item as DemoClub,
+                            const SizedBox(height: 16),
+                            ...recommended.map((entry) {
+                              if (entry.item is DemoClub) {
+                                return DemoClubCard(
+                                  club: entry.item as DemoClub,
+                                  matchedKeyword: entry.matchedKeyword,
+                                );
+                              }
+
+                              final doc = entry.item as QueryDocumentSnapshot;
+                              final data = doc.data() as Map<String, dynamic>;
+                              return ClubCard(
+                                groupId: doc.id,
+                                data: data,
+                                chatService: _chatService,
                                 matchedKeyword: entry.matchedKeyword,
                               );
-                            }
-
-                            final doc = entry.item as QueryDocumentSnapshot;
-                            final data = doc.data() as Map<String, dynamic>;
-                            return ClubCard(
-                              groupId: doc.id,
-                              data: data,
-                              chatService: _chatService,
-                              matchedKeyword: entry.matchedKeyword,
-                            );
-                          }),
-                        ],
-                      ),
-              ),
-          ],
+                            }),
+                          ],
+                        ),
+                ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

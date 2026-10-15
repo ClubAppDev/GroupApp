@@ -43,8 +43,10 @@ class AiService {
 
   /// Build-time override, passed by CI as
   /// `--dart-define=GEMINI_API_KEY=...`. Empty on an ordinary local build.
-  static const String _definedKey =
-      String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+  static const String _definedKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
 
   /// The key actually used. A `--dart-define` wins when one was passed;
   /// otherwise this falls back to the gitignored `ai_secrets.dart`, so a
@@ -84,8 +86,9 @@ class AiService {
       "features.\n"
       "- Never ask for or handle passwords, join codes, or personal data.";
 
-  final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'us-central1');
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'us-central1',
+  );
 
   /// Sends the full conversation history and returns the assistant's reply.
   Future<String> sendMessage(List<AiMessage> history) async {
@@ -134,12 +137,14 @@ class AiService {
 
     // Gemini uses `contents` with role 'user' or 'model' and `parts: [{text}]`.
     final contents = history
-        .map((m) => {
-              'role': m.isUser ? 'user' : 'model',
-              'parts': [
-                {'text': m.content},
-              ],
-            })
+        .map(
+          (m) => {
+            'role': m.isUser ? 'user' : 'model',
+            'parts': [
+              {'text': m.content},
+            ],
+          },
+        )
         .toList();
 
     final uri = Uri.parse(

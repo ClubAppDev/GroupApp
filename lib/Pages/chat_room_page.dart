@@ -10,6 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:login_ui/Pages/direct_message_page.dart';
 import 'package:login_ui/Pages/group_roles_page.dart';
 import 'package:login_ui/components/jarvis_avatar.dart';
+import 'package:login_ui/components/message_reactions.dart';
+import 'package:login_ui/components/member_list_sheet.dart';
+import 'package:login_ui/components/user_profile_sheet.dart';
 import 'package:login_ui/Pages/club_day_page.dart';
 import 'package:login_ui/Pages/club_stats_page.dart';
 import 'package:login_ui/data/interests_catalog.dart';
@@ -43,11 +46,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   bool _isSending = false;
   bool _jarvisThinking = false;
-  bool _isGeneratingSummary = false;
   Map<String, dynamic>? _replyContext;
   String? _activeThreadRootId;
-
-  static const List<String> _quickReactions = <String>['👍', '🔥', '🎉'];
 
   IconData _iconFromName(String name) {
     switch (name) {
@@ -114,19 +114,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }).length;
   }
 
-  Map<String, int> _reactionCounts(List<String> reactionKeys) {
-    final counts = <String, int>{};
-    for (final key in reactionKeys) {
-      final emoji = key.split('::').first;
-      counts[emoji] = (counts[emoji] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  bool _userHasReaction(List<String> reactionKeys, String emoji, String email) {
-    return reactionKeys.contains('$emoji::$email');
-  }
-
   void _setReplyContext(String messageId, Map<String, dynamic> message) {
     final preview = ((message['text'] as String?) ?? '').trim();
     final sender = (message['senderEmail'] as String?) ?? '';
@@ -162,7 +149,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          // reverse:true puts the newest message at offset 0.
+          0,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
@@ -1071,12 +1059,56 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     required int replyCount,
     required bool canModerateMessages,
   }) async {
+    final reactionKeys = List<String>.from(
+      message['reactions'] ?? const <String>[],
+    );
+    final mine = MessageReactions.myEmojis(
+      reactionKeys,
+      FirebaseAuth.instance.currentUser?.email ?? '',
+    );
+
     showModalBottomSheet(
       context: context,
+      showDragHandle: true,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: MessageReactions.palette.map((emoji) {
+                  final isOn = mine.contains(emoji);
+                  return InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _chatService.toggleMessageReaction(
+                        widget.groupId,
+                        messageId,
+                        emoji,
+                      );
+                    },
+                    child: Container(
+                      width: 46,
+                      height: 46,
+                      alignment: Alignment.center,
+                      decoration: isOn
+                          ? BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.16),
+                              shape: BoxShape.circle,
+                            )
+                          : null,
+                      child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.reply),
               title: const Text('Reply'),
@@ -1113,35 +1145,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         ),
       ),
     );
-  }
-
-  Future<void> _summarizeRecentActivity() async {
-    if (_isGeneratingSummary) return;
-    setState(() => _isGeneratingSummary = true);
-    try {
-      final recentMessages = await _chatService.getRecentGroupMessages(
-        widget.groupId,
-        limit: 25,
-      );
-      final reply = await _aiService.askJarvis(
-        'Summarize the missed activity in this group in 3 to 5 short bullets.',
-        recentMessages: recentMessages,
-      );
-      await _chatService.postJarvisMessage(widget.groupId, reply);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Posted a catch-up summary from Jarvis.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error generating summary: $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _isGeneratingSummary = false);
-      }
-    }
   }
 
   Future<void> _leaveGroup() async {
@@ -1427,49 +1430,21 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     );
   }
 
-  Widget _buildReactionBar({
-    required String messageId,
-    required List<String> reactionKeys,
-    required String currentUserEmail,
-    required Color textColor,
-    required Color accentColor,
-  }) {
-    final counts = _reactionCounts(reactionKeys);
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: _quickReactions.map((emoji) {
-        final count = counts[emoji] ?? 0;
-        final isSelected = _userHasReaction(
-          reactionKeys,
-          emoji,
-          currentUserEmail,
-        );
-        return InkWell(
-          onTap: () => _chatService.toggleMessageReaction(
-            widget.groupId,
-            messageId,
-            emoji,
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? accentColor.withValues(alpha: 0.16)
-                  : Colors.black.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              count > 0 ? '$emoji $count' : emoji,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? accentColor : textColor,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+  Widget _buildTappableAvatar(
+    String email,
+    bool isDark,
+    ColorScheme colorScheme,
+    Map<String, dynamic>? groupData,
+    Color accent,
+  ) {
+    return GestureDetector(
+      onTap: () => showUserProfile(
+        context: context,
+        email: email,
+        groupData: groupData,
+        accent: accent,
+      ),
+      child: _buildAvatar(email, isDark, colorScheme),
     );
   }
 
@@ -1487,7 +1462,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               ? colorScheme.surfaceContainerHigh
               : colorScheme.surfaceContainerHighest,
           backgroundImage: snapshot.hasData && snapshot.data != null
-              ? CachedNetworkImageProvider(snapshot.data!)
+              ? CachedNetworkImageProvider(snapshot.data!, maxWidth: 120)
               : null,
           child: snapshot.hasData && snapshot.data != null
               ? null
@@ -1620,6 +1595,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             iconTheme: IconThemeData(color: onThemeColor),
             actions: [
               IconButton(
+                icon: const Icon(Icons.people_outline),
+                tooltip: 'Members',
+                onPressed: () => showMemberList(
+                  context: context,
+                  groupData: groupData ?? const <String, dynamic>{},
+                  groupName: widget.groupName,
+                  accent: themeColor,
+                ),
+              ),
+              IconButton(
                 icon: const Icon(Icons.how_to_reg),
                 tooltip: 'Club Day',
                 onPressed: () => Navigator.push(
@@ -1633,63 +1618,94 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   ),
                 ),
               ),
-              if (canManageCheckIns)
-                IconButton(
-                  icon: const Icon(Icons.insert_chart_outlined),
-                  tooltip: 'Club statistics',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ClubStatsPage(
-                        groupId: widget.groupId,
-                        groupName: widget.groupName,
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                tooltip: 'More',
+                onSelected: (value) {
+                  switch (value) {
+                    case 'stats':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClubStatsPage(
+                            groupId: widget.groupId,
+                            groupName: widget.groupName,
+                          ),
+                        ),
+                      );
+                      break;
+                    case 'create':
+                      _showCreateContentSheet();
+                      break;
+                    case 'settings':
+                      _showGroupSettingsDialog(
+                        groupData ?? const <String, dynamic>{},
+                        members,
+                        createdBy,
+                        canManageSettings,
+                      );
+                      break;
+                    case 'home':
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      break;
+                    case 'leave':
+                      _leaveGroup();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (canManageCheckIns)
+                    const PopupMenuItem(
+                      value: 'stats',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.insert_chart_outlined),
+                        title: Text('Club statistics'),
+                      ),
+                    ),
+                  if (canManageEvents || canPostAnnouncements)
+                    const PopupMenuItem(
+                      value: 'create',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.add_circle_outline),
+                        title: Text('Event or announcement'),
+                      ),
+                    ),
+                  if (canManageSettings)
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.settings),
+                        title: Text('Group settings'),
+                      ),
+                    ),
+                  const PopupMenuItem(
+                    value: 'home',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.home_outlined),
+                      title: Text('Back to home'),
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'leave',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.exit_to_app, color: Colors.red),
+                      title: Text(
+                        'Leave group',
+                        style: TextStyle(color: Colors.red),
                       ),
                     ),
                   ),
-                ),
-              if (canManageEvents || canPostAnnouncements)
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  tooltip: 'Create an event or announcement',
-                  onPressed: _showCreateContentSheet,
-                ),
-              IconButton(
-                icon: _isGeneratingSummary
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: onThemeColor,
-                        ),
-                      )
-                    : const Icon(Icons.summarize_outlined),
-                tooltip: 'Summarize missed activity',
-                onPressed: _isGeneratingSummary
-                    ? null
-                    : _summarizeRecentActivity,
-              ),
-              if (canManageSettings)
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  tooltip: 'Group settings',
-                  onPressed: () => _showGroupSettingsDialog(
-                    groupData,
-                    members,
-                    createdBy,
-                    canManageSettings,
-                  ),
-                ),
-              IconButton(
-                icon: const Icon(Icons.home),
-                tooltip: 'Back to home',
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
-              ),
-              IconButton(
-                icon: const Icon(Icons.exit_to_app),
-                tooltip: 'Leave group',
-                onPressed: _leaveGroup,
+                ],
               ),
               IconButton(
                 icon: const Icon(Icons.info_outline),
@@ -1844,592 +1860,652 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               ),
             ],
           ),
-          body: NeonBackground(
-            child: Column(
-              children: [
-                if ((groupData?['pinnedMessageId'] as String?) != null)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: themeColor.withValues(alpha: 0.35),
+          body: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: NeonBackground(
+              child: Column(
+                children: [
+                  if ((groupData?['pinnedMessageId'] as String?) != null)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: themeColor.withValues(alpha: 0.35),
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.push_pin, size: 18, color: themeColor),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Pinned message',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
+                      child: Row(
+                        children: [
+                          Icon(Icons.push_pin, size: 18, color: themeColor),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pinned message',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                (groupData?['pinnedMessageText'] as String?) ??
-                                    '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => _openThread(
-                            (groupData?['pinnedMessageId'] as String?)!,
-                          ),
-                          child: const Text('Open'),
-                        ),
-                        if (canManageMessages)
-                          IconButton(
-                            onPressed: () =>
-                                _chatService.clearPinnedMessage(widget.groupId),
-                            icon: const Icon(Icons.close),
-                          ),
-                      ],
-                    ),
-                  ),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _chatService.getMessages(widget.groupId),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const SkeletonChat();
-                      }
-                      if (snapshot.hasError) {
-                        return Center(child: Text('Error: ${snapshot.error}'));
-                      }
-
-                      final allMessages =
-                          snapshot.data?.docs ??
-                          const <QueryDocumentSnapshot>[];
-                      final messages = _filteredMessages(allMessages);
-                      if (messages.isEmpty) {
-                        return Center(
-                          child: Text(
-                            _activeThreadRootId == null
-                                ? 'No messages yet. Start the conversation!'
-                                : 'No replies in this thread yet.',
-                            style: TextStyle(
-                              color: colorScheme.onSurfaceVariant,
+                                const SizedBox(height: 2),
+                                Text(
+                                  (groupData?['pinnedMessageText']
+                                          as String?) ??
+                                      '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(16),
-                        findChildIndexCallback: (key) {
-                          if (key is! ValueKey<String>) return null;
-                          final index = messages.indexWhere(
-                            (message) => message.id == key.value,
-                          );
-                          return index < 0 ? null : index;
-                        },
-                        itemCount: messages.length + (_jarvisThinking ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (_jarvisThinking && index == messages.length) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const JarvisAvatar(radius: 16),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? colorScheme.surfaceContainerHigh
-                                          : colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Jarvis is thinking...',
-                                          style: TextStyle(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                          TextButton(
+                            onPressed: () => _openThread(
+                              (groupData?['pinnedMessageId'] as String?)!,
+                            ),
+                            child: const Text('Open'),
+                          ),
+                          if (canManageMessages)
+                            IconButton(
+                              onPressed: () => _chatService.clearPinnedMessage(
+                                widget.groupId,
                               ),
+                              icon: const Icon(Icons.close),
+                            ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _chatService.getMessages(widget.groupId),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const SkeletonChat();
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text('Error: ${snapshot.error}'),
+                          );
+                        }
+
+                        final allMessages =
+                            snapshot.data?.docs ??
+                            const <QueryDocumentSnapshot>[];
+                        final messages = _filteredMessages(allMessages);
+                        if (messages.isEmpty) {
+                          return Center(
+                            child: Text(
+                              _activeThreadRootId == null
+                                  ? 'No messages yet. Start the conversation!'
+                                  : 'No replies in this thread yet.',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Reversed so the room opens on the latest message and
+                        // new ones arrive at the resting edge.
+                        final ordered = messages.reversed.toList();
+
+                        return ListView.builder(
+                          controller: _scrollController,
+                          reverse: true,
+                          padding: const EdgeInsets.all(16),
+                          findChildIndexCallback: (key) {
+                            if (key is! ValueKey<String>) return null;
+                            final index = ordered.indexWhere(
+                              (message) => message.id == key.value,
                             );
-                          }
-
-                          final messageDoc = messages[index];
-                          final message =
-                              messageDoc.data() as Map<String, dynamic>;
-                          final messageId = messageDoc.id;
-                          final messageType =
-                              (message['type'] as String?) ?? 'text';
-                          final isClubPost =
-                              messageType == 'event' ||
-                              messageType == 'announcement';
-                          final text = (message['text'] as String?) ?? '';
-                          final imageUrl = message['imageUrl'] as String?;
-                          final senderEmail =
-                              (message['senderEmail'] as String?) ?? '';
-                          final isMe = senderEmail == currentUserEmail;
-                          final timestamp = (message['timestamp'] as Timestamp?)
-                              ?.toDate();
-                          final fileData = message['file'] == null
-                              ? null
-                              : Map<String, dynamic>.from(
-                                  message['file'] as Map,
-                                );
-                          final pollData = message['poll'] == null
-                              ? null
-                              : Map<String, dynamic>.from(
-                                  message['poll'] as Map,
-                                );
-                          final reactionKeys = List<String>.from(
-                            message['reactions'] ?? const <String>[],
-                          );
-                          final replyCount = _replyCountForMessage(
-                            messageId,
-                            allMessages,
-                          );
-                          final bubbleTextColor = isClubPost
-                              ? colorScheme.onSurface
-                              : isMe
-                              ? onThemeColor
-                              : colorScheme.onSurface;
-                          final bubbleMutedColor = isClubPost
-                              ? colorScheme.onSurfaceVariant
-                              : isMe
-                              ? onThemeColor.withValues(alpha: 0.72)
-                              : colorScheme.onSurfaceVariant;
-
-                          return AnimatedEntrance(
-                            key: ValueKey(messageId),
-                            child: Align(
-                              alignment: isMe
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Row(
-                                mainAxisAlignment: isMe
-                                    ? MainAxisAlignment.end
-                                    : MainAxisAlignment.start,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (!isMe) ...[
-                                    _buildAvatar(
-                                      senderEmail,
-                                      isDark,
-                                      colorScheme,
-                                    ),
+                            return index < 0 ? null : index;
+                          },
+                          itemCount: ordered.length + (_jarvisThinking ? 1 : 0),
+                          itemBuilder: (context, rawIndex) {
+                            // Index 0 is the newest under reverse:true, so the
+                            // thinking row belongs at the front.
+                            if (_jarvisThinking && rawIndex == 0) {
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const JarvisAvatar(radius: 16),
                                     const SizedBox(width: 8),
-                                  ],
-                                  Flexible(
-                                    child: GestureDetector(
-                                      onLongPress: () => _showMessageActions(
-                                        messageId: messageId,
-                                        message: message,
-                                        replyCount: replyCount,
-                                        canModerateMessages: canManageMessages,
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment: isMe
-                                            ? CrossAxisAlignment.end
-                                            : CrossAxisAlignment.start,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? colorScheme.surfaceContainerHigh
+                                            : colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Container(
-                                            margin: const EdgeInsets.only(
-                                              bottom: 8,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 10,
-                                            ),
-                                            constraints: BoxConstraints(
-                                              maxWidth:
-                                                  MediaQuery.of(
-                                                    context,
-                                                  ).size.width *
-                                                  0.74,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isClubPost
-                                                  ? colorScheme.surface
-                                                  : isMe
-                                                  ? themeColor
-                                                  : (isDark
-                                                        ? colorScheme
-                                                              .surfaceContainerHigh
-                                                        : colorScheme.surface),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: isClubPost
-                                                  ? Border.all(
-                                                      color: themeColor
-                                                          .withValues(
-                                                            alpha: 0.35,
-                                                          ),
-                                                    )
-                                                  : null,
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                if (!isMe)
-                                                  Text(
-                                                    _displayName(senderEmail),
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color:
-                                                          Jarvis.isJarvis(
-                                                            senderEmail,
-                                                          )
-                                                          ? AppColors.brass
-                                                          : colorScheme
-                                                                .onSurfaceVariant,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                if (!isMe)
-                                                  const SizedBox(height: 4),
-                                                if (!isClubPost)
-                                                  _buildReplyPreview(
-                                                    message,
-                                                    bubbleTextColor,
-                                                    bubbleMutedColor,
-                                                  ),
-                                                if (isClubPost)
-                                                  _buildClubPostCard(
-                                                    message,
-                                                    themeColor,
-                                                  ),
-                                                if (!isClubPost &&
-                                                    pollData != null)
-                                                  _buildPollCard(
-                                                    messageId,
-                                                    pollData,
-                                                    currentUserEmailSafe,
-                                                    themeColor,
-                                                    bubbleTextColor,
-                                                    bubbleMutedColor,
-                                                  ),
-                                                if (!isClubPost &&
-                                                    fileData != null) ...[
-                                                  _buildFileAttachment(
-                                                    context,
-                                                    fileData,
-                                                    bubbleTextColor,
-                                                    bubbleMutedColor,
-                                                  ),
-                                                  if (text.isNotEmpty)
-                                                    const SizedBox(height: 8),
-                                                ],
-                                                if (!isClubPost &&
-                                                    imageUrl != null) ...[
-                                                  GestureDetector(
-                                                    onTap: () {
-                                                      showDialog(
-                                                        context: context,
-                                                        builder: (context) => Dialog(
-                                                          child:
-                                                              InteractiveViewer(
-                                                                child:
-                                                                    Image.network(
-                                                                      imageUrl,
-                                                                    ),
-                                                              ),
-                                                        ),
-                                                      );
-                                                    },
-                                                    child: ClipRRect(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
-                                                          ),
-                                                      child: CachedNetworkImage(
-                                                        imageUrl: imageUrl,
-                                                        width: 200,
-                                                        fit: BoxFit.cover,
-                                                        memCacheWidth: 600,
-                                                        placeholder:
-                                                            (
-                                                              context,
-                                                              url,
-                                                            ) => const SizedBox(
-                                                              width: 200,
-                                                              height: 200,
-                                                              child: Center(
-                                                                child:
-                                                                    CircularProgressIndicator(),
-                                                              ),
-                                                            ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  if (text.isNotEmpty)
-                                                    const SizedBox(height: 8),
-                                                ],
-                                                if (!isClubPost &&
-                                                    text.isNotEmpty &&
-                                                    pollData == null)
-                                                  Text(
-                                                    text,
-                                                    style: TextStyle(
-                                                      color: bubbleTextColor,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                if (timestamp != null) ...[
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    _formatTime(timestamp),
-                                                    style: TextStyle(
-                                                      fontSize: 9,
-                                                      color: bubbleMutedColor,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
+                                          SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
                                             ),
                                           ),
-                                          if (replyCount > 0 &&
-                                              _activeThreadRootId == null)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 6,
-                                                left: 4,
-                                                right: 4,
-                                              ),
-                                              child: InkWell(
-                                                onTap: () =>
-                                                    _openThread(messageId),
-                                                child: Text(
-                                                  '$replyCount repl${replyCount == 1 ? 'y' : 'ies'}',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: themeColor,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Jarvis is thinking...',
+                                            style: TextStyle(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontSize: 12,
                                             ),
-                                          _buildReactionBar(
-                                            messageId: messageId,
-                                            reactionKeys: reactionKeys,
-                                            currentUserEmail:
-                                                currentUserEmailSafe,
-                                            textColor:
-                                                colorScheme.onSurfaceVariant,
-                                            accentColor: themeColor,
                                           ),
                                         ],
                                       ),
                                     ),
-                                  ),
-                                  if (isMe) ...[
-                                    const SizedBox(width: 8),
-                                    _buildAvatar(
-                                      senderEmail,
-                                      isDark,
-                                      colorScheme,
-                                    ),
                                   ],
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color:
-                        (isDark
-                                ? colorScheme.surfaceContainerHigh
-                                : colorScheme.surface)
-                            .withValues(alpha: 0.92),
-                    border: Border(
-                      top: BorderSide(
-                        color: AppColors.cyan.withValues(alpha: 0.18),
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_activeThreadRootId != null)
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.forum_outlined, size: 18),
-                              const SizedBox(width: 8),
-                              const Expanded(child: Text('Replying in thread')),
-                              TextButton(
-                                onPressed: _closeThread,
-                                child: const Text('Exit'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (_replyContext != null)
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
+                                ),
+                              );
+                            }
+
+                            // The thinking row occupies index 0 while it is
+                            // visible, so shift past it.
+                            final index = _jarvisThinking
+                                ? rawIndex - 1
+                                : rawIndex;
+                            final messageDoc = ordered[index];
+                            final message =
+                                messageDoc.data() as Map<String, dynamic>;
+                            final messageId = messageDoc.id;
+                            final messageType =
+                                (message['type'] as String?) ?? 'text';
+                            final isClubPost =
+                                messageType == 'event' ||
+                                messageType == 'announcement';
+                            final text = (message['text'] as String?) ?? '';
+                            final imageUrl = message['imageUrl'] as String?;
+                            final senderEmail =
+                                (message['senderEmail'] as String?) ?? '';
+                            final isMe = senderEmail == currentUserEmail;
+                            final timestamp =
+                                (message['timestamp'] as Timestamp?)?.toDate();
+                            final fileData = message['file'] == null
+                                ? null
+                                : Map<String, dynamic>.from(
+                                    message['file'] as Map,
+                                  );
+                            final pollData = message['poll'] == null
+                                ? null
+                                : Map<String, dynamic>.from(
+                                    message['poll'] as Map,
+                                  );
+                            final reactionKeys = List<String>.from(
+                              message['reactions'] ?? const <String>[],
+                            );
+                            final replyCount = _replyCountForMessage(
+                              messageId,
+                              allMessages,
+                            );
+                            final bubbleTextColor = isClubPost
+                                ? colorScheme.onSurface
+                                : isMe
+                                ? onThemeColor
+                                : colorScheme.onSurface;
+                            final bubbleMutedColor = isClubPost
+                                ? colorScheme.onSurfaceVariant
+                                : isMe
+                                ? onThemeColor.withValues(alpha: 0.72)
+                                : colorScheme.onSurfaceVariant;
+
+                            return AnimatedEntrance(
+                              key: ValueKey(messageId),
+                              child: Align(
+                                alignment: isMe
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Row(
+                                  mainAxisAlignment: isMe
+                                      ? MainAxisAlignment.end
+                                      : MainAxisAlignment.start,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Replying to ${_displayName((_replyContext?['sender'] as String?) ?? '')}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: colorScheme.onSurface,
+                                    if (!isMe) ...[
+                                      _buildTappableAvatar(
+                                        senderEmail,
+                                        isDark,
+                                        colorScheme,
+                                        groupData,
+                                        themeColor,
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    Flexible(
+                                      child: GestureDetector(
+                                        onLongPress: () => _showMessageActions(
+                                          messageId: messageId,
+                                          message: message,
+                                          replyCount: replyCount,
+                                          canModerateMessages:
+                                              canManageMessages,
+                                        ),
+                                        onDoubleTap: () {
+                                          HapticFeedback.lightImpact();
+                                          _chatService.toggleMessageReaction(
+                                            widget.groupId,
+                                            messageId,
+                                            MessageReactions.quick,
+                                          );
+                                        },
+                                        child: Column(
+                                          crossAxisAlignment: isMe
+                                              ? CrossAxisAlignment.end
+                                              : CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 10,
+                                                  ),
+                                              constraints: BoxConstraints(
+                                                maxWidth:
+                                                    MediaQuery.of(
+                                                      context,
+                                                    ).size.width *
+                                                    0.74,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isClubPost
+                                                    ? colorScheme.surface
+                                                    : isMe
+                                                    ? themeColor
+                                                    : (isDark
+                                                          ? colorScheme
+                                                                .surfaceContainerHigh
+                                                          : colorScheme
+                                                                .surface),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: isClubPost
+                                                    ? Border.all(
+                                                        color: themeColor
+                                                            .withValues(
+                                                              alpha: 0.35,
+                                                            ),
+                                                      )
+                                                    : null,
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  if (!isMe)
+                                                    Text(
+                                                      _displayName(senderEmail),
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            Jarvis.isJarvis(
+                                                              senderEmail,
+                                                            )
+                                                            ? AppColors.brass
+                                                            : colorScheme
+                                                                  .onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  if (!isMe)
+                                                    const SizedBox(height: 4),
+                                                  if (!isClubPost)
+                                                    _buildReplyPreview(
+                                                      message,
+                                                      bubbleTextColor,
+                                                      bubbleMutedColor,
+                                                    ),
+                                                  if (isClubPost)
+                                                    _buildClubPostCard(
+                                                      message,
+                                                      themeColor,
+                                                    ),
+                                                  if (!isClubPost &&
+                                                      pollData != null)
+                                                    _buildPollCard(
+                                                      messageId,
+                                                      pollData,
+                                                      currentUserEmailSafe,
+                                                      themeColor,
+                                                      bubbleTextColor,
+                                                      bubbleMutedColor,
+                                                    ),
+                                                  if (!isClubPost &&
+                                                      fileData != null) ...[
+                                                    _buildFileAttachment(
+                                                      context,
+                                                      fileData,
+                                                      bubbleTextColor,
+                                                      bubbleMutedColor,
+                                                    ),
+                                                    if (text.isNotEmpty)
+                                                      const SizedBox(height: 8),
+                                                  ],
+                                                  if (!isClubPost &&
+                                                      imageUrl != null) ...[
+                                                    GestureDetector(
+                                                      onTap: () {
+                                                        showDialog(
+                                                          context: context,
+                                                          builder: (context) => Dialog(
+                                                            child: InteractiveViewer(
+                                                              child:
+                                                                  Image.network(
+                                                                    imageUrl,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
+                                                        child: CachedNetworkImage(
+                                                          imageUrl: imageUrl,
+                                                          width: 200,
+                                                          fit: BoxFit.cover,
+                                                          memCacheWidth: 600,
+                                                          placeholder:
+                                                              (
+                                                                context,
+                                                                url,
+                                                              ) => const SizedBox(
+                                                                width: 200,
+                                                                height: 200,
+                                                                child: Center(
+                                                                  child:
+                                                                      CircularProgressIndicator(),
+                                                                ),
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    if (text.isNotEmpty)
+                                                      const SizedBox(height: 8),
+                                                  ],
+                                                  if (!isClubPost &&
+                                                      text.isNotEmpty &&
+                                                      pollData == null)
+                                                    Text(
+                                                      text,
+                                                      style: TextStyle(
+                                                        color: bubbleTextColor,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  if (timestamp != null) ...[
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      _formatTime(timestamp),
+                                                      style: TextStyle(
+                                                        fontSize: 9,
+                                                        color: bubbleMutedColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (replyCount > 0 &&
+                                                _activeThreadRootId == null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 6,
+                                                  left: 4,
+                                                  right: 4,
+                                                ),
+                                                child: InkWell(
+                                                  onTap: () =>
+                                                      _openThread(messageId),
+                                                  child: Text(
+                                                    '$replyCount repl${replyCount == 1 ? 'y' : 'ies'}',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: themeColor,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (reactionKeys.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 4,
+                                                ),
+                                                child: ReactionBadge(
+                                                  reactionKeys: reactionKeys,
+                                                  currentUserEmail:
+                                                      currentUserEmailSafe,
+                                                  onToggle: (emoji) =>
+                                                      _chatService
+                                                          .toggleMessageReaction(
+                                                            widget.groupId,
+                                                            messageId,
+                                                            emoji,
+                                                          ),
+                                                  onMore: () =>
+                                                      _showMessageActions(
+                                                        messageId: messageId,
+                                                        message: message,
+                                                        replyCount: replyCount,
+                                                        canModerateMessages:
+                                                            canManageMessages,
+                                                      ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      (_replyContext?['preview'] as String?) ??
-                                          '',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: colorScheme.onSurfaceVariant,
+                                    if (isMe) ...[
+                                      const SizedBox(width: 8),
+                                      _buildTappableAvatar(
+                                        senderEmail,
+                                        isDark,
+                                        colorScheme,
+                                        groupData,
+                                        themeColor,
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                onPressed: _clearReplyContext,
-                                icon: const Icon(Icons.close),
-                              ),
-                            ],
-                          ),
-                        ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.add_circle_outline,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            onPressed: _isSending || !canSend
-                                ? null
-                                : _showAttachmentSheet,
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: InputDecoration(
-                                hintText: canSend
-                                    ? 'Type a message...'
-                                    : "You don't have permission to post",
-                                hintStyle: TextStyle(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: isDark
-                                    ? colorScheme.surfaceContainerHigh
-                                    : colorScheme.surfaceContainerLow,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 10,
-                                ),
-                              ),
-                              style: TextStyle(color: colorScheme.onSurface),
-                              maxLines: null,
-                              textCapitalization: TextCapitalization.sentences,
-                              enabled: !_isSending && canSend,
-                              onSubmitted: (_) =>
-                                  canSend ? _sendMessage() : null,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            backgroundColor: themeColor,
-                            child: _isSending
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(
-                                      Icons.send,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: canSend ? _sendMessage : null,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color:
+                          (isDark
+                                  ? colorScheme.surfaceContainerHigh
+                                  : colorScheme.surface)
+                              .withValues(alpha: 0.92),
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.cyan.withValues(alpha: 0.18),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_activeThreadRootId != null)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.forum_outlined, size: 18),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text('Replying in thread'),
+                                ),
+                                TextButton(
+                                  onPressed: _closeThread,
+                                  child: const Text('Exit'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_replyContext != null)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Replying to ${_displayName((_replyContext?['sender'] as String?) ?? '')}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        (_replyContext?['preview']
+                                                as String?) ??
+                                            '',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: _clearReplyContext,
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.add_circle_outline,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              onPressed: _isSending || !canSend
+                                  ? null
+                                  : _showAttachmentSheet,
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _messageController,
+                                decoration: InputDecoration(
+                                  hintText: canSend
+                                      ? 'Type a message...'
+                                      : "You don't have permission to post",
+                                  hintStyle: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor: isDark
+                                      ? colorScheme.surfaceContainerHigh
+                                      : colorScheme.surfaceContainerLow,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                style: TextStyle(color: colorScheme.onSurface),
+                                maxLines: null,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                enabled: !_isSending && canSend,
+                                onSubmitted: (_) =>
+                                    canSend ? _sendMessage() : null,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              backgroundColor: themeColor,
+                              child: _isSending
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : IconButton(
+                                      icon: const Icon(
+                                        Icons.send,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                      onPressed: canSend ? _sendMessage : null,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

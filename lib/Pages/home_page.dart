@@ -94,7 +94,9 @@ class _HomePageState extends State<HomePage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Preferences saved. Your recommendations are personalized.'),
+        content: Text(
+          'Preferences saved. Your recommendations are personalized.',
+        ),
       ),
     );
   }
@@ -118,13 +120,10 @@ class _HomePageState extends State<HomePage> {
           .doc(event.groupId)
           .get();
       final data = groupDoc.data();
-      isAdmin = email != null &&
+      isAdmin =
+          email != null &&
           data != null &&
-          _chatService.hasGroupPermission(
-            data,
-            email,
-            'manage_check_ins',
-          );
+          _chatService.hasGroupPermission(data, email, 'manage_check_ins');
     } catch (_) {
       // Fall through as a non-admin: the roster is still worth showing.
     }
@@ -541,10 +540,7 @@ class _HomePageState extends State<HomePage> {
                   child: _calendarBlock(),
                 ),
                 const SizedBox(height: _sectionGap),
-                _section(
-                  title: 'ANNOUNCEMENTS',
-                  child: _announcementsList(),
-                ),
+                _section(title: 'ANNOUNCEMENTS', child: _announcementsList()),
               ],
             ),
           ),
@@ -925,7 +921,7 @@ class _HomePageState extends State<HomePage> {
               showNotifications: showNotifications,
               isInitialLoading:
                   snapshot.connectionState == ConnectionState.waiting &&
-                      !snapshot.hasData,
+                  !snapshot.hasData,
             );
           },
         ),

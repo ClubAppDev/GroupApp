@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/Pages/chat_room_page.dart';
+import 'package:login_ui/Pages/friends_page.dart';
 import 'package:login_ui/Pages/direct_message_page.dart';
 import 'package:login_ui/Pages/admin_activity_page.dart';
 import 'package:login_ui/Pages/support_chat_page.dart';
@@ -100,7 +101,8 @@ class _ChatListPageState extends State<ChatListPage> {
                             .where((value) => value.isNotEmpty)
                             .toList();
                         if (existing.any(
-                          (value) => value.toLowerCase() == keyword.toLowerCase(),
+                          (value) =>
+                              value.toLowerCase() == keyword.toLowerCase(),
                         )) {
                           return;
                         }
@@ -147,13 +149,18 @@ class _ChatListPageState extends State<ChatListPage> {
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate,
-                                  size: 32, color: Colors.grey[600]),
+                              Icon(
+                                Icons.add_photo_alternate,
+                                size: 32,
+                                color: Colors.grey[600],
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 'Add Banner Image',
                                 style: TextStyle(
-                                    color: Colors.grey[600], fontSize: 12),
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
@@ -443,18 +450,26 @@ class _ChatListPageState extends State<ChatListPage> {
         flexibleSpace: const GradientAppBarBackground(),
         title: const Text(
           'Messages',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.people_outline, color: Colors.white),
+            tooltip: 'Friends',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FriendsPage()),
+            ),
+          ),
           FutureBuilder<bool>(
             future: _chatService.isCurrentUserSchoolAdmin(),
             builder: (context, snapshot) {
               if (snapshot.data != true) return const SizedBox.shrink();
               return IconButton(
-                icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+                icon: const Icon(
+                  Icons.admin_panel_settings,
+                  color: Colors.white,
+                ),
                 tooltip: 'Admin: Club Activity',
                 onPressed: () {
                   Navigator.push(
@@ -473,140 +488,33 @@ class _ChatListPageState extends State<ChatListPage> {
         child: StreamBuilder<QuerySnapshot>(
           stream: _chatService.getDirectMessageThreads(),
           builder: (context, dmSnapshot) {
-          return StreamBuilder<QuerySnapshot>(
-            stream: _chatService.getUserGroups(),
-            builder: (context, groupSnapshot) {
-              if (dmSnapshot.connectionState == ConnectionState.waiting ||
-                  groupSnapshot.connectionState == ConnectionState.waiting) {
-                return const SkeletonList();
-              }
+            return StreamBuilder<QuerySnapshot>(
+              stream: _chatService.getUserGroups(),
+              builder: (context, groupSnapshot) {
+                if (dmSnapshot.connectionState == ConnectionState.waiting ||
+                    groupSnapshot.connectionState == ConnectionState.waiting) {
+                  return const SkeletonList();
+                }
 
-              if (dmSnapshot.hasError) {
-                return Center(child: Text('Error: ${dmSnapshot.error}'));
-              }
+                if (dmSnapshot.hasError) {
+                  return Center(child: Text('Error: ${dmSnapshot.error}'));
+                }
 
-              if (groupSnapshot.hasError) {
-                return Center(child: Text('Error: ${groupSnapshot.error}'));
-              }
+                if (groupSnapshot.hasError) {
+                  return Center(child: Text('Error: ${groupSnapshot.error}'));
+                }
 
-              final dmDocs = dmSnapshot.data?.docs ?? [];
-              final groupDocs = groupSnapshot.data?.docs ?? [];
+                final dmDocs = dmSnapshot.data?.docs ?? [];
+                final groupDocs = groupSnapshot.data?.docs ?? [];
 
-              // The list can legitimately be empty before joining a group.
+                // The list can legitimately be empty before joining a group.
 
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // Direct Messages — always shown (Jarvis is pinned here).
-                  Text(
-                    'Direct Messages',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Pinned Jarvis assistant chat.
-                  AnimatedEntrance(
-                    child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.secondary.withValues(alpha: 0.35),
-                        width: 1,
-                      ),
-                    ),
-                    child: ListTile(
-                      leading: const JarvisAvatar(radius: 22),
-                      title: Text(
-                        'Jarvis',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Your AI assistant',
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SupportChatPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  ),
-                  if (dmDocs.isNotEmpty) ...[
-                    ...dmDocs.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final participants = List<String>.from(
-                        data['participants'] ?? [],
-                      );
-                      final currentEmail =
-                          FirebaseAuth.instance.currentUser?.email ?? '';
-                      final other = participants.firstWhere(
-                        (email) => email != currentEmail,
-                        orElse: () => 'Unknown',
-                      );
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: colorScheme.primary,
-                            child: Icon(Icons.person, color: colorScheme.onPrimary),
-                          ),
-                          title: Text(
-                            other,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => DirectMessagePage(
-                                  threadId: doc.id,
-                                  otherEmail: other,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 8),
-                  ],
-                  // Group chats, all of them real Firestore groups.
-                  ...[
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // Direct Messages — always shown (Jarvis is pinned here).
                     Text(
-                      'Group Chats',
+                      'Direct Messages',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -614,39 +522,29 @@ class _ChatListPageState extends State<ChatListPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...groupDocs.map((group) {
-                      final groupData = group.data() as Map<String, dynamic>;
-                      final groupName = groupData['name'] ?? 'Unnamed Group';
-                      final members = List<String>.from(
-                        groupData['members'] ?? [],
-                      );
-                      final isPublic = groupData['isPublic'] as bool? ?? false;
-                      final themeColorValue =
-                          groupData['themeColor'] ?? Colors.grey[800]!.toARGB32();
-                      final themeIconName = groupData['themeIcon'] ?? 'group';
-                      final themeColor = Color(themeColorValue);
-                      final icon = _iconFromName(themeIconName);
-
-                      return Container(
+                    // Pinned Jarvis assistant chat.
+                    AnimatedEntrance(
+                      child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: Theme.of(context).cardColor,
                           borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.secondary.withValues(alpha: 0.35),
+                            width: 1,
+                          ),
                         ),
                         child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: themeColor,
-                            child: Icon(icon, color: Colors.white),
-                          ),
+                          leading: const JarvisAvatar(radius: 22),
                           title: Text(
-                            groupName,
+                            'Jarvis',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: colorScheme.onSurface,
                             ),
                           ),
                           subtitle: Text(
-                            '${members.length} members • ${isPublic ? 'Discoverable' : 'Private'}',
+                            'Your AI assistant',
                             style: TextStyle(
                               color: colorScheme.onSurfaceVariant,
                               fontSize: 12,
@@ -661,22 +559,144 @@ class _ChatListPageState extends State<ChatListPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => ChatRoomPage(
-                                  groupId: group.id,
-                                  groupName: groupName,
-                                ),
+                                builder: (context) => const SupportChatPage(),
                               ),
                             );
                           },
                         ),
-                      );
-                    }),
+                      ),
+                    ),
+                    if (dmDocs.isNotEmpty) ...[
+                      ...dmDocs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final participants = List<String>.from(
+                          data['participants'] ?? [],
+                        );
+                        final currentEmail =
+                            FirebaseAuth.instance.currentUser?.email ?? '';
+                        final other = participants.firstWhere(
+                          (email) => email != currentEmail,
+                          orElse: () => 'Unknown',
+                        );
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: colorScheme.primary,
+                              child: Icon(
+                                Icons.person,
+                                color: colorScheme.onPrimary,
+                              ),
+                            ),
+                            title: Text(
+                              other,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            trailing: Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DirectMessagePage(
+                                    threadId: doc.id,
+                                    otherEmail: other,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                    ],
+                    // Group chats, all of them real Firestore groups.
+                    ...[
+                      Text(
+                        'Group Chats',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...groupDocs.map((group) {
+                        final groupData = group.data() as Map<String, dynamic>;
+                        final groupName = groupData['name'] ?? 'Unnamed Group';
+                        final members = List<String>.from(
+                          groupData['members'] ?? [],
+                        );
+                        final isPublic =
+                            groupData['isPublic'] as bool? ?? false;
+                        final themeColorValue =
+                            groupData['themeColor'] ??
+                            Colors.grey[800]!.toARGB32();
+                        final themeIconName = groupData['themeIcon'] ?? 'group';
+                        final themeColor = Color(themeColorValue);
+                        final icon = _iconFromName(themeIconName);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: themeColor,
+                              child: Icon(icon, color: Colors.white),
+                            ),
+                            title: Text(
+                              groupName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${members.length} members • ${isPublic ? 'Discoverable' : 'Private'}',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatRoomPage(
+                                    groupId: group.id,
+                                    groupName: groupName,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }),
+                    ],
                   ],
-                ],
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
         ),
       ),
       floatingActionButton: Column(

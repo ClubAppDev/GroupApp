@@ -29,8 +29,9 @@ class MyApp extends StatelessWidget {
     const secondaryColor = AppColors.secondary;
 
     final baseTextColor = isDark ? AppColors.textDark : AppColors.textLight;
-    final mutedTextColor =
-        isDark ? AppColors.textMutedDark : AppColors.textMutedLight;
+    final mutedTextColor = isDark
+        ? AppColors.textMutedDark
+        : AppColors.textMutedLight;
     final poppinsTextTheme = GoogleFonts.poppinsTextTheme(
       ThemeData(brightness: brightness).textTheme,
     ).apply(bodyColor: baseTextColor, displayColor: baseTextColor);
@@ -50,7 +51,9 @@ class MyApp extends StatelessWidget {
             primary: primaryColor,
             secondary: secondaryColor,
             surface: surface,
-            surfaceContainerLow: isDark ? AppColors.surface : const Color(0xFFF0EBDF),
+            surfaceContainerLow: isDark
+                ? AppColors.surface
+                : const Color(0xFFF0EBDF),
             surfaceContainerHigh: surfaceHigh,
             surfaceContainerHighest: surfaceHigh,
             onSurface: baseTextColor,
@@ -78,15 +81,11 @@ class MyApp extends StatelessWidget {
         ),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white,
+        fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         hintStyle: TextStyle(color: mutedTextColor),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -169,13 +168,16 @@ class _AuthGateState extends State<_AuthGate> {
     });
 
     _groupsSub?.cancel();
-    _groupsSub = _chatService.getUserGroups().listen((_) {
-      _groupsDone = true;
-      _updateReady();
-    }, onError: (_) {
-      _groupsDone = true;
-      _updateReady();
-    });
+    _groupsSub = _chatService.getUserGroups().listen(
+      (_) {
+        _groupsDone = true;
+        _updateReady();
+      },
+      onError: (_) {
+        _groupsDone = true;
+        _updateReady();
+      },
+    );
   }
 
   void _updateReady() {

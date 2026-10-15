@@ -611,6 +611,7 @@ class ChatService {
           'text': message,
           'senderEmail': currentUser.email,
           'timestamp': FieldValue.serverTimestamp(),
+          'reactions': const <String>[],
         });
   }
 
@@ -797,27 +798,50 @@ class ChatService {
     String groupId,
     String messageId,
     String emoji,
+  ) => _toggleReaction(
+    _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('messages')
+        .doc(messageId),
+    emoji,
+  );
+
+  /// Same reaction behaviour for a one-to-one thread, so both chat surfaces
+  /// stay in step rather than drifting apart.
+  Future<void> toggleDirectMessageReaction(
+    String threadId,
+    String messageId,
+    String emoji,
+  ) => _toggleReaction(
+    _firestore
+        .collection('directMessages')
+        .doc(threadId)
+        .collection('messages')
+        .doc(messageId),
+    emoji,
+  );
+
+  /// Reactions are stored as 'emoji::email' strings, which keeps one array
+  /// per message and makes a toggle a single arrayUnion/arrayRemove.
+  Future<void> _toggleReaction(
+    DocumentReference<Map<String, dynamic>> docRef,
+    String emoji,
   ) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null || currentUser.email == null) {
       throw Exception('Not logged in');
     }
 
-    final docRef = _firestore
-        .collection('groups')
-        .doc(groupId)
-        .collection('messages')
-        .doc(messageId);
     final snapshot = await docRef.get();
     final data = snapshot.data();
     if (data == null) throw Exception('Message not found');
 
     final key = _reactionKey(emoji, currentUser.email!);
     final reactions = List<String>.from(data['reactions'] ?? const <String>[]);
-    final contains = reactions.contains(key);
 
     await docRef.update({
-      'reactions': contains
+      'reactions': reactions.contains(key)
           ? FieldValue.arrayRemove([key])
           : FieldValue.arrayUnion([key]),
     });
@@ -843,6 +867,47 @@ class ChatService {
       'pinnedMessageSender': FieldValue.delete(),
       'pinnedAt': FieldValue.delete(),
     });
+  }
+
+  /// Posts a Jarvis reply into a direct-message thread.
+  ///
+  /// Jarvis is a virtual participant, so the asking person's client writes
+  /// the reply on its behalf; the rules allow the bot address as a sender
+  /// precisely because there is no server doing it.
+  Future<void> postJarvisDirectMessage(String threadId, String text) async {
+    await _firestore
+        .collection('directMessages')
+        .doc(threadId)
+        .collection('messages')
+        .add({
+          'type': 'summary',
+          'text': text,
+          'senderEmail': jarvisEmail,
+          'timestamp': FieldValue.serverTimestamp(),
+          'reactions': const <String>[],
+        });
+  }
+
+  /// Recent turns of a DM thread, oldest first, as context for Jarvis.
+  Future<List<Map<String, String>>> getRecentDirectMessages(
+    String threadId, {
+    int limit = 10,
+  }) async {
+    final snapshot = await _firestore
+        .collection('directMessages')
+        .doc(threadId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .get();
+
+    return snapshot.docs.reversed.map((doc) {
+      final data = doc.data();
+      return {
+        'sender': (data['senderEmail'] as String?) ?? '',
+        'text': (data['text'] as String?) ?? '',
+      };
+    }).toList();
   }
 
   /// Returns the last [limit] messages in a group (oldest first) as simple

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/check_in_service.dart';
+import '../theme/app_theme.dart';
 
 /// Club statistics: every club day, and the attendance sheet for each.
 ///
@@ -24,12 +25,22 @@ class ClubStatsPage extends StatefulWidget {
 class _ClubStatsPageState extends State<ClubStatsPage> {
   final CheckInService _service = CheckInService();
 
+  /// One report per club day, kept for the life of the screen. Without this
+  /// the list re-queried Firestore on every scroll.
+  final Map<String, Future<ClubDayReport>> _reports = {};
+
+  Future<ClubDayReport> _reportFor(String dateKey) => _reports.putIfAbsent(
+    dateKey,
+    () => _service.buildReport(widget.groupId, dateKey),
+  );
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: const Text('Club Statistics'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(28),
@@ -79,7 +90,7 @@ class _ClubStatsPageState extends State<ClubStatsPage> {
               return _DayTile(
                 dateKey: key,
                 isOpen: isOpen,
-                service: _service,
+                report: _reportFor(key),
                 groupId: widget.groupId,
                 groupName: widget.groupName,
               );
@@ -91,20 +102,20 @@ class _ClubStatsPageState extends State<ClubStatsPage> {
   }
 }
 
-/// One club day in the list. Counts are loaded per row so the list itself
-/// stays cheap when a club has many days.
+/// One club day in the list. The report is supplied already-memoised by
+/// the parent, so recycling this row costs nothing.
 class _DayTile extends StatelessWidget {
   const _DayTile({
     required this.dateKey,
     required this.isOpen,
-    required this.service,
+    required this.report,
     required this.groupId,
     required this.groupName,
   });
 
   final String dateKey;
   final bool isOpen;
-  final CheckInService service;
+  final Future<ClubDayReport> report;
   final String groupId;
   final String groupName;
 
@@ -113,7 +124,7 @@ class _DayTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return FutureBuilder<ClubDayReport>(
-      future: service.buildReport(groupId, dateKey),
+      future: report,
       builder: (context, snap) {
         final r = snap.data;
         return ListTile(
@@ -123,23 +134,29 @@ class _DayTile extends StatelessWidget {
           ),
           title: Row(
             children: [
-              Text(_pretty(dateKey),
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                _pretty(dateKey),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               if (isOpen) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Text('OPEN',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.green,
-                      )),
+                  child: const Text(
+                    'OPEN',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.green,
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -171,8 +188,18 @@ class _DayTile extends StatelessWidget {
     final d = DateTime.tryParse(key);
     if (d == null) return key;
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
@@ -227,6 +254,7 @@ class _ClubDaySheetPageState extends State<ClubDaySheetPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: Text(widget.dateKey),
         actions: [
           IconButton(
@@ -340,22 +368,28 @@ class _ClubDaySheetPageState extends State<ClubDaySheetPage> {
             for (final row in r.rows)
               DataRow(
                 cells: [
-                  DataCell(Text(
-                    row.displayName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  )),
-                  DataCell(Text(
-                    row.email,
-                    style: TextStyle(
-                        fontSize: 12.5, color: cs.onSurfaceVariant),
-                  )),
+                  DataCell(
+                    Text(
+                      row.displayName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      row.email,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                   DataCell(_statusPill(row.present, row.method)),
-                  DataCell(Text(
-                    row.checkedInAt == null
-                        ? '—'
-                        : _clock(row.checkedInAt!),
-                    style: const TextStyle(fontSize: 13),
-                  )),
+                  DataCell(
+                    Text(
+                      row.checkedInAt == null ? '—' : _clock(row.checkedInAt!),
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
                 ],
               ),
           ],

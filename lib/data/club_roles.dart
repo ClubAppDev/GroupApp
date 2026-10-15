@@ -11,10 +11,7 @@ class ClubRole {
   final Set<String> permissions;
   final bool isBuiltIn;
 
-  ClubRole copyWith({
-    String? name,
-    Set<String>? permissions,
-  }) {
+  ClubRole copyWith({String? name, Set<String>? permissions}) {
     return ClubRole(
       id: id,
       name: name ?? this.name,
@@ -77,12 +74,7 @@ class ClubRole {
         'manage_check_ins',
       },
     ),
-    ClubRole(
-      id: 'member',
-      name: 'Member',
-      isBuiltIn: true,
-      permissions: {},
-    ),
+    ClubRole(id: 'member', name: 'Member', isBuiltIn: true, permissions: {}),
   ];
 }
 

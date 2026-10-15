@@ -196,7 +196,8 @@ class GlassCard extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return Padding(padding: margin ?? EdgeInsets.zero, child: card);
+    if (onTap == null)
+      return Padding(padding: margin ?? EdgeInsets.zero, child: card);
     return Padding(
       padding: margin ?? EdgeInsets.zero,
       child: Material(
@@ -314,10 +315,14 @@ class AnimatedEntrance extends StatefulWidget {
 
 class _AnimatedEntranceState extends State<AnimatedEntrance>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: widget.duration);
-  late final Animation<double> _curve =
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
 
   @override
   void initState() {

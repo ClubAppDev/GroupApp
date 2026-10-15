@@ -251,11 +251,7 @@ class _UnityRevealOverlayState extends State<UnityRevealOverlay>
               return Center(
                 child: Transform.rotate(
                   angle: spin,
-                  child: UnityLogo(
-                    size: 160,
-                    assembly: 1,
-                    explode: explode,
-                  ),
+                  child: UnityLogo(size: 160, assembly: 1, explode: explode),
                 ),
               );
             },

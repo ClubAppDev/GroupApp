@@ -39,98 +39,103 @@ class AdminDashboardPage extends StatelessWidget {
       ),
       body: NeonBackground(
         child: StreamBuilder<QuerySnapshot>(
-        stream: _chatService.getAllGroupsForAdmin(),
-        builder: (context, snapshot) {
-          final docs = snapshot.data?.docs ?? [];
-          final pending = docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return (data['publicRequestStatus'] as String? ?? 'none') == 'pending';
-          }).length;
+          stream: _chatService.getAllGroupsForAdmin(),
+          builder: (context, snapshot) {
+            final docs = snapshot.data?.docs ?? [];
+            final pending = docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return (data['publicRequestStatus'] as String? ?? 'none') ==
+                  'pending';
+            }).length;
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(14),
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Welcome, Admin',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Manage club governance, public approvals, and activity checks from here.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Welcome, Admin',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Manage club governance, public approvals, and activity checks from here.',
-                      style: TextStyle(color: colorScheme.onSurfaceVariant),
-                    ),
-                  ],
+                const SizedBox(height: 14),
+                _AdminActionCard(
+                  title: 'Club Approval Requests',
+                  // Leads with the action either way: an empty queue is still a
+                  // place you go to verify requests, not a dead end.
+                  subtitle: pending > 0
+                      ? 'Pending requests — verify $pending club ${pending == 1 ? 'request' : 'requests'} waiting for approval.'
+                      : 'Pending requests — verify club requests for public listing.',
+                  icon: Icons.approval_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdminActivityPage(),
+                      ),
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 14),
-              _AdminActionCard(
-                title: 'Club Approval Requests',
-                // Leads with the action either way: an empty queue is still a
-                // place you go to verify requests, not a dead end.
-                subtitle: pending > 0
-                    ? 'Pending requests — verify $pending club ${pending == 1 ? 'request' : 'requests'} waiting for approval.'
-                    : 'Pending requests — verify club requests for public listing.',
-                icon: Icons.approval_outlined,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AdminActivityPage(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              _AdminActionCard(
-                title: 'Club Day Attendance',
-                subtitle:
-                    'Sign-in sheets for every club — who showed up, when, and who did not.',
-                icon: Icons.how_to_reg,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AllClubsStatsPage(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              _AdminActionCard(
-                title: 'Club Activity Check',
-                subtitle: 'Review club engagement health and current visibility states.',
-                icon: Icons.analytics_outlined,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ClubActivityCheckPage(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: () => _signOut(context),
-                icon: const Icon(Icons.logout, color: Colors.red),
-                label: const Text(
-                  'Sign Out Admin',
-                  style: TextStyle(color: Colors.red),
+                const SizedBox(height: 12),
+                _AdminActionCard(
+                  title: 'Club Day Attendance',
+                  subtitle:
+                      'Sign-in sheets for every club — who showed up, when, and who did not.',
+                  icon: Icons.how_to_reg,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AllClubsStatsPage(),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                const SizedBox(height: 12),
+                _AdminActionCard(
+                  title: 'Club Activity Check',
+                  subtitle:
+                      'Review club engagement health and current visibility states.',
+                  icon: Icons.analytics_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ClubActivityCheckPage(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: () => _signOut(context),
+                  icon: const Icon(Icons.logout, color: Colors.red),
+                  label: const Text(
+                    'Sign Out Admin',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -175,10 +180,16 @@ class _AdminActionCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),

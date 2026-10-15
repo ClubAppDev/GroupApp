@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:login_ui/services/chat_service.dart';
 import 'package:login_ui/components/skeleton_loader.dart';
+import '../theme/app_theme.dart';
 
 class ClubActivityCheckPage extends StatefulWidget {
   const ClubActivityCheckPage({super.key});
@@ -201,6 +202,7 @@ class _ClubActivityCheckPageState extends State<ClubActivityCheckPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         backgroundColor: colorScheme.primary,
         iconTheme: IconThemeData(color: colorScheme.onPrimary),
         title: Text(
@@ -532,6 +534,7 @@ class _ClubAuditDetailPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         backgroundColor: colorScheme.primary,
         iconTheme: IconThemeData(color: colorScheme.onPrimary),
         title: Text(

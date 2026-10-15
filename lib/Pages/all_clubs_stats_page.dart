@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../services/check_in_service.dart';
 import 'club_stats_page.dart';
+import '../theme/app_theme.dart';
 
 /// Every club's attendance, for the school admin.
 ///
@@ -17,7 +18,10 @@ class AllClubsStatsPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('All Club Statistics')),
+      appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
+        title: const Text('All Club Statistics'),
+      ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: service.watchAllGroups(),
         builder: (context, snap) {
@@ -43,7 +47,9 @@ class AllClubsStatsPage extends StatelessWidget {
                   child: Text(
                     '${groups.length} ${groups.length == 1 ? 'club' : 'clubs'}',
                     style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 15),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
                   ),
                 );
               }
@@ -51,8 +57,9 @@ class AllClubsStatsPage extends StatelessWidget {
               final doc = groups[i - 1];
               final d = doc.data();
               final name = (d['name'] as String?) ?? 'Club';
-              final members =
-                  List<String>.from(d['members'] ?? const []).length;
+              final members = List<String>.from(
+                d['members'] ?? const [],
+              ).length;
               final admins = List<String>.from(d['admins'] ?? const []);
 
               return ListTile(
@@ -60,8 +67,10 @@ class AllClubsStatsPage extends StatelessWidget {
                   backgroundColor: cs.primary.withValues(alpha: 0.15),
                   child: Icon(Icons.groups, color: cs.primary, size: 20),
                 ),
-                title: Text(name,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                title: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 subtitle: Text(
                   '$members ${members == 1 ? 'member' : 'members'}'
                   '${admins.isEmpty ? '' : '  •  ${admins.first}'}',
@@ -73,10 +82,8 @@ class AllClubsStatsPage extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ClubStatsPage(
-                      groupId: doc.id,
-                      groupName: name,
-                    ),
+                    builder: (_) =>
+                        ClubStatsPage(groupId: doc.id, groupName: name),
                   ),
                 ),
               );

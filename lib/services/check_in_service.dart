@@ -106,10 +106,10 @@ class CheckInService {
       'uid': user.uid,
       'email': user.email,
     });
-    await userRef.set(
-      {'email': user.email, 'checkInToken': token},
-      SetOptions(merge: true),
-    );
+    await userRef.set({
+      'email': user.email,
+      'checkInToken': token,
+    }, SetOptions(merge: true));
 
     // Drop the old mapping last, so a failure here cannot leave the member
     // without a working token.
@@ -193,8 +193,7 @@ class CheckInService {
   Stream<DocumentSnapshot<Map<String, dynamic>>> watchClubDay(
     String groupId,
     String dateKey,
-  ) =>
-      _days(groupId).doc(dateKey).snapshots();
+  ) => _days(groupId).doc(dateKey).snapshots();
 
   /// Club days newest first, for the statistics list.
   Stream<QuerySnapshot<Map<String, dynamic>>> watchClubDays(String groupId) =>
@@ -205,12 +204,11 @@ class CheckInService {
   Stream<QuerySnapshot<Map<String, dynamic>>> watchClubDayCheckIns(
     String groupId,
     String dateKey,
-  ) =>
-      _days(groupId)
-          .doc(dateKey)
-          .collection('checkIns')
-          .orderBy('checkedInAt', descending: true)
-          .snapshots();
+  ) => _days(groupId)
+      .doc(dateKey)
+      .collection('checkIns')
+      .orderBy('checkedInAt', descending: true)
+      .snapshots();
 
   /// Records a member present at a club day.
   ///
@@ -245,10 +243,10 @@ class CheckInService {
         );
       }
 
-      final groupSnap =
-          await _db.collection('groups').doc(groupId).get();
-      final members =
-          List<String>.from(groupSnap.data()?['members'] ?? const []);
+      final groupSnap = await _db.collection('groups').doc(groupId).get();
+      final members = List<String>.from(
+        groupSnap.data()?['members'] ?? const [],
+      );
       if (!members.contains(who.email)) {
         return const CheckInResult(
           ok: false,
@@ -266,19 +264,18 @@ class CheckInService {
 
       final profile = await _db.collection('users').doc(who.uid).get();
       final p = profile.data() ?? const <String, dynamic>{};
-      final name = [p['firstName'], p['lastName']]
-          .whereType<String>()
-          .where((s) => s.isNotEmpty)
-          .join(' ');
+      final name = [
+        p['firstName'],
+        p['lastName'],
+      ].whereType<String>().where((s) => s.isNotEmpty).join(' ');
       final displayName = name.isEmpty ? who.email : name;
       final photoUrl = p['profilePicture'] as String?;
 
       // Doc id is the uid, so a second scan updates one row instead of
       // inflating the count.
-      final ref = _days(groupId)
-          .doc(dateKey)
-          .collection('checkIns')
-          .doc(who.uid);
+      final ref = _days(
+        groupId,
+      ).doc(dateKey).collection('checkIns').doc(who.uid);
 
       if ((await ref.get()).exists) {
         return CheckInResult(
@@ -325,11 +322,7 @@ class CheckInService {
   }
 
   /// Removes a check-in, for a mis-scan.
-  Future<void> undoClubDayCheckIn(
-    String groupId,
-    String dateKey,
-    String uid,
-  ) =>
+  Future<void> undoClubDayCheckIn(String groupId, String dateKey, String uid) =>
       _days(groupId).doc(dateKey).collection('checkIns').doc(uid).delete();
 
   // ---------------------------------------------------------------------------
@@ -341,15 +334,15 @@ class CheckInService {
   /// of only the people who scanned cannot tell you who is missing.
   Future<ClubDayReport> buildReport(String groupId, String dateKey) async {
     final groupSnap = await _db.collection('groups').doc(groupId).get();
-    final members = List<String>.from(
-      groupSnap.data()?['members'] ?? const [],
-    )..sort();
+    final members = List<String>.from(groupSnap.data()?['members'] ?? const [])
+      ..sort();
 
     final daySnap = await _days(groupId).doc(dateKey).get();
     final day = daySnap.data() ?? const <String, dynamic>{};
 
-    final checkIns =
-        await _days(groupId).doc(dateKey).collection('checkIns').get();
+    final checkIns = await _days(
+      groupId,
+    ).doc(dateKey).collection('checkIns').get();
     final byEmail = <String, Map<String, dynamic>>{};
     for (final d in checkIns.docs) {
       final e = d.data()['email'] as String?;
@@ -362,20 +355,24 @@ class CheckInService {
     for (final email in members) {
       final hit = byEmail[email];
       if (hit != null) {
-        rows.add(AttendanceRow(
-          email: email,
-          displayName: (hit['displayName'] as String?) ?? email,
-          present: true,
-          checkedInAt: (hit['checkedInAt'] as Timestamp?)?.toDate(),
-          photoUrl: hit['photoUrl'] as String?,
-          method: hit['method'] as String?,
-        ));
+        rows.add(
+          AttendanceRow(
+            email: email,
+            displayName: (hit['displayName'] as String?) ?? email,
+            present: true,
+            checkedInAt: (hit['checkedInAt'] as Timestamp?)?.toDate(),
+            photoUrl: hit['photoUrl'] as String?,
+            method: hit['method'] as String?,
+          ),
+        );
       } else {
-        rows.add(AttendanceRow(
-          email: email,
-          displayName: await _nameFor(email) ?? email,
-          present: false,
-        ));
+        rows.add(
+          AttendanceRow(
+            email: email,
+            displayName: await _nameFor(email) ?? email,
+            present: false,
+          ),
+        );
       }
     }
 
@@ -391,7 +388,8 @@ class CheckInService {
 
     return ClubDayReport(
       dateKey: dateKey,
-      date: (day['date'] as Timestamp?)?.toDate() ??
+      date:
+          (day['date'] as Timestamp?)?.toDate() ??
           DateTime.tryParse(dateKey) ??
           DateTime.now(),
       isOpen: day['isOpen'] == true,
@@ -411,10 +409,10 @@ class CheckInService {
           .get();
       if (q.docs.isEmpty) return _nameCache[email] = null;
       final p = q.docs.first.data();
-      final name = [p['firstName'], p['lastName']]
-          .whereType<String>()
-          .where((s) => s.isNotEmpty)
-          .join(' ');
+      final name = [
+        p['firstName'],
+        p['lastName'],
+      ].whereType<String>().where((s) => s.isNotEmpty).join(' ');
       return _nameCache[email] = name.isEmpty ? null : name;
     } catch (_) {
       return _nameCache[email] = null;
@@ -439,9 +437,9 @@ class CheckInService {
       final time = t == null
           ? ''
           : '${t.year}-${t.month.toString().padLeft(2, '0')}-'
-              '${t.day.toString().padLeft(2, '0')} '
-              '${t.hour.toString().padLeft(2, '0')}:'
-              '${t.minute.toString().padLeft(2, '0')}';
+                '${t.day.toString().padLeft(2, '0')} '
+                '${t.hour.toString().padLeft(2, '0')}:'
+                '${t.minute.toString().padLeft(2, '0')}';
       out.writeln(
         '${esc(r.displayName)},${esc(r.email)},'
         '${r.present ? 'Present' : 'Absent'},$time,${r.method ?? ''}',

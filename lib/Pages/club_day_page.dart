@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/check_in_service.dart';
 import 'check_in_scanner_page.dart';
 import 'club_stats_page.dart';
+import '../theme/app_theme.dart';
 
 /// Club Day: the live sign-in session for one date.
 ///
@@ -109,14 +110,16 @@ class _ClubDayPageState extends State<ClubDayPage> {
       memberEmail: email.trim().toLowerCase(),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(result.message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: const Text('Club Day'),
         actions: [
           IconButton(
@@ -185,9 +188,13 @@ class _ClubDayPageState extends State<ClubDayPage> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(pretty,
-                        style: TextStyle(
-                            fontSize: 13, color: cs.onSurfaceVariant)),
+                    Text(
+                      pretty,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -203,7 +210,9 @@ class _ClubDayPageState extends State<ClubDayPage> {
                     child: FilledButton.icon(
                       onPressed: _working ? null : _openDay,
                       icon: const Icon(Icons.play_arrow),
-                      label: Text(exists ? 'Reopen club day' : 'Start club day'),
+                      label: Text(
+                        exists ? 'Reopen club day' : 'Start club day',
+                      ),
                     ),
                   )
                 else ...[
@@ -235,8 +244,8 @@ class _ClubDayPageState extends State<ClubDayPage> {
     final (String label, Color color) = !exists
         ? ('Not started', Colors.grey)
         : isOpen
-            ? ('Open', Colors.green)
-            : ('Closed', Colors.orange);
+        ? ('Open', Colors.green)
+        : ('Closed', Colors.orange);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -277,9 +286,11 @@ class _ClubDayPageState extends State<ClubDayPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.qr_code_scanner,
-                      size: 40,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  Icon(
+                    Icons.qr_code_scanner,
+                    size: 40,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(height: 14),
                   Text(
                     isOpen
@@ -309,16 +320,20 @@ class _ClubDayPageState extends State<ClubDayPage> {
                     Text(
                       '${docs.length} signed in',
                       style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 15),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
                     ),
                     const Spacer(),
-                    Text('TIME',
-                        style: TextStyle(
-                          fontSize: 11,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        )),
+                    Text(
+                      'TIME',
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -333,7 +348,11 @@ class _ClubDayPageState extends State<ClubDayPage> {
             return ListTile(
               leading: (photoUrl != null && photoUrl.isNotEmpty)
                   ? CircleAvatar(
-                      backgroundImage: CachedNetworkImageProvider(photoUrl))
+                      backgroundImage: CachedNetworkImageProvider(
+                        photoUrl,
+                        maxWidth: 120,
+                      ),
+                    )
                   : const CircleAvatar(child: Icon(Icons.person_outline)),
               title: Text(
                 (d['displayName'] as String?) ?? 'Member',
@@ -349,11 +368,15 @@ class _ClubDayPageState extends State<ClubDayPage> {
               trailing: Text(
                 at == null ? '—' : _clock(at),
                 style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 13),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
               onLongPress: widget.isAdmin
-                  ? () => _confirmUndo(doc.id,
-                      (d['displayName'] as String?) ?? 'this member')
+                  ? () => _confirmUndo(
+                      doc.id,
+                      (d['displayName'] as String?) ?? 'this member',
+                    )
                   : null,
             );
           },
@@ -393,8 +416,18 @@ class _ClubDayPageState extends State<ClubDayPage> {
 
   static String _prettyDate(DateTime d) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }

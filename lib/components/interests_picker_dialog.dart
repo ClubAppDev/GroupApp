@@ -73,8 +73,7 @@ Future<List<String>?> showInterestsPickerDialog(
                   ),
                   ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxHeight:
-                          MediaQuery.of(context).size.height * 0.8,
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
                     ),
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
@@ -83,98 +82,56 @@ Future<List<String>?> showInterestsPickerDialog(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.16),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.auto_awesome,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            const Expanded(
-                              child: Text(
-                                'Pick Your Interests',
-                                style: TextStyle(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.auto_awesome,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 20,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          isOnboarding
-                              ? 'Choose topics you care about so we can recommend clubs that fit you.'
-                              : 'Update what you are into. Recommendations refresh instantly.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 13,
-                            height: 1.35,
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'Pick Your Interests',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: featuredInterests.map((word) {
-                            final isSelected = selected.contains(word);
-                            return ChoiceChip(
-                              label: Text(
-                                word,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? AppColors.navy
-                                      : Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              selected: isSelected,
-                              backgroundColor: AppColors.navyMid,
-                              selectedColor: AppColors.brass,
-                              side: BorderSide(
-                                color: isSelected
-                                    ? AppColors.brass
-                                    : Colors.white.withValues(alpha: 0.55),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              onSelected: (nextValue) {
-                                setDialogState(() {
-                                  if (nextValue) {
-                                    selected.add(word);
-                                  } else {
-                                    selected.remove(word);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
+                          Text(
+                            isOnboarding
+                                ? 'Choose topics you care about so we can recommend clubs that fit you.'
+                                : 'Update what you are into. Recommendations refresh instantly.',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: InterestsCatalog.all
-                                .where((interest) =>
-                                    !featuredInterests.contains(interest))
-                                .map((interest) {
-                              final isSelected = selected.contains(interest);
+                            children: featuredInterests.map((word) {
+                              final isSelected = selected.contains(word);
                               return ChoiceChip(
                                 label: Text(
-                                  interest,
+                                  word,
                                   style: TextStyle(
                                     color: isSelected
                                         ? AppColors.navy
                                         : Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 selected: isSelected,
@@ -191,14 +148,63 @@ Future<List<String>?> showInterestsPickerDialog(
                                 onSelected: (nextValue) {
                                   setDialogState(() {
                                     if (nextValue) {
-                                      selected.add(interest);
+                                      selected.add(word);
                                     } else {
-                                      selected.remove(interest);
+                                      selected.remove(word);
                                     }
                                   });
                                 },
                               );
                             }).toList(),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: InterestsCatalog.all
+                                .where(
+                                  (interest) =>
+                                      !featuredInterests.contains(interest),
+                                )
+                                .map((interest) {
+                                  final isSelected = selected.contains(
+                                    interest,
+                                  );
+                                  return ChoiceChip(
+                                    label: Text(
+                                      interest,
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? AppColors.navy
+                                            : Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    selected: isSelected,
+                                    backgroundColor: AppColors.navyMid,
+                                    selectedColor: AppColors.brass,
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? AppColors.brass
+                                          : Colors.white.withValues(
+                                              alpha: 0.55,
+                                            ),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    onSelected: (nextValue) {
+                                      setDialogState(() {
+                                        if (nextValue) {
+                                          selected.add(interest);
+                                        } else {
+                                          selected.remove(interest);
+                                        }
+                                      });
+                                    },
+                                  );
+                                })
+                                .toList(),
                           ),
                           const SizedBox(height: 14),
                           Row(
@@ -217,8 +223,9 @@ Future<List<String>?> showInterestsPickerDialog(
                                   child: Text(
                                     'Cancel',
                                     style: TextStyle(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.85),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.85,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -226,9 +233,9 @@ Future<List<String>?> showInterestsPickerDialog(
                                 onPressed: selected.isEmpty
                                     ? null
                                     : () => Navigator.pop(
-                                          context,
-                                          selected.toList()..sort(),
-                                        ),
+                                        context,
+                                        selected.toList()..sort(),
+                                      ),
                                 icon: const Icon(Icons.check),
                                 label: Text(
                                   isOnboarding ? 'Save & Continue' : 'Save',

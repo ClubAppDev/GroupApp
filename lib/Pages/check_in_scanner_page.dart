@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/check_in_service.dart';
+import '../theme/app_theme.dart';
 
 /// Camera scanner for member QR codes.
 ///
@@ -112,6 +113,7 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: Text(widget.title, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
@@ -192,10 +194,9 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
               const SizedBox(height: 16),
               Text(
                 'Camera unavailable',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(color: Colors.white),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 8),
               Text(
@@ -244,7 +245,10 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
             if (r.ok && r.photoUrl != null && r.photoUrl!.isNotEmpty)
               CircleAvatar(
                 radius: 26,
-                backgroundImage: CachedNetworkImageProvider(r.photoUrl!),
+                backgroundImage: CachedNetworkImageProvider(
+                  r.photoUrl!,
+                  maxWidth: 160,
+                ),
               )
             else
               Icon(icon, color: Colors.white, size: 34),
@@ -265,8 +269,10 @@ class _CheckInScannerPageState extends State<CheckInScannerPage> {
                   if (r.ok && r.email != null)
                     Text(
                       r.email!,
-                      style:
-                          const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                 ],
               ),

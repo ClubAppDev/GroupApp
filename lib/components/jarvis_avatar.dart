@@ -100,9 +100,11 @@ class _JarvisAvatarPainter extends CustomPainter {
 
     // Pulsing outer glow ring (brass), grows/brightens with pulse.
     final glowRing = Paint()
-      ..color = const Color(0xFFE6C55A)
-          .withValues(alpha: 0.30 + 0.45 * pulse)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * (0.10 + 0.14 * pulse));
+      ..color = const Color(0xFFE6C55A).withValues(alpha: 0.30 + 0.45 * pulse)
+      ..maskFilter = MaskFilter.blur(
+        BlurStyle.normal,
+        r * (0.10 + 0.14 * pulse),
+      );
     canvas.drawCircle(center, r * 0.86, glowRing);
 
     // Crisp outer ring (brass).

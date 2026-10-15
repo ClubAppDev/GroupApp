@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:login_ui/data/club_roles.dart';
 import 'package:login_ui/services/chat_service.dart';
+import '../theme/app_theme.dart';
 
 class GroupRolesPage extends StatefulWidget {
   const GroupRolesPage({
@@ -38,9 +39,7 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
     _roles = rawRoles is List
         ? rawRoles
               .whereType<Map>()
-              .map(
-                (role) => ClubRole.fromMap(Map<String, dynamic>.from(role)),
-              )
+              .map((role) => ClubRole.fromMap(Map<String, dynamic>.from(role)))
               .where((role) => role.id.isNotEmpty)
               .toList()
         : ClubRole.builtInRoles.toList();
@@ -98,7 +97,8 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('Create'),
           ),
         ],
@@ -180,9 +180,9 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
       Navigator.pop(context);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save roles: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save roles: $error')));
       setState(() => _isSaving = false);
     }
   }
@@ -190,16 +190,18 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final roleMembers = widget.members
-        .where((email) => _memberRoles[email] == _selectedRoleId)
-        .toList()
-      ..sort();
+    final roleMembers =
+        widget.members
+            .where((email) => _memberRoles[email] == _selectedRoleId)
+            .toList()
+          ..sort();
     final categories = ClubPermission.all
         .map((permission) => permission.category)
         .toSet();
 
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: const Text('Roles & permissions'),
         actions: [
           TextButton(
@@ -230,8 +232,7 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
                 (role) => ChoiceChip(
                   label: Text(role.name),
                   selected: role.id == _selectedRoleId,
-                  onSelected: (_) =>
-                      setState(() => _selectedRoleId = role.id),
+                  onSelected: (_) => setState(() => _selectedRoleId = role.id),
                 ),
               ),
               ActionChip(
@@ -329,18 +330,20 @@ class _GroupRolesPageState extends State<GroupRolesPage> {
               child: ExpansionTile(
                 key: ValueKey('$_selectedRoleId-$category'),
                 title: Text(category),
-                subtitle: Text('$enabledCount of ${permissions.length} enabled'),
+                subtitle: Text(
+                  '$enabledCount of ${permissions.length} enabled',
+                ),
                 children: permissions.map((permission) {
                   final isPresident = _selectedRoleId == 'president';
                   return SwitchListTile(
                     title: Text(permission.title),
                     subtitle: Text(permission.description),
-                    value: isPresident ||
+                    value:
+                        isPresident ||
                         _selectedRole.permissions.contains(permission.id),
                     onChanged: isPresident
                         ? null
-                        : (value) =>
-                              _togglePermission(permission.id, value),
+                        : (value) => _togglePermission(permission.id, value),
                   );
                 }).toList(),
               ),

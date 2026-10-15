@@ -81,6 +81,7 @@ class _MyCheckInCodePageState extends State<MyCheckInCodePage> {
 
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const GradientAppBarBackground(),
         title: const Text('My Check-In Code'),
         actions: [
           IconButton(

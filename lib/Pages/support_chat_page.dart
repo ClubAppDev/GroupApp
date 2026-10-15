@@ -90,132 +90,130 @@ class _SupportChatPageState extends State<SupportChatPage> {
           children: [
             const JarvisAvatar(radius: 14),
             const SizedBox(width: 10),
-            const Text(
-              'Jarvis',
-              style: TextStyle(color: Colors.white),
-            ),
+            const Text('Jarvis', style: TextStyle(color: Colors.white)),
           ],
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: NeonBackground(
         child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length + (_isSending ? 1 : 0),
-              itemBuilder: (context, index) {
-                // Typing indicator as the trailing item while waiting.
-                if (_isSending && index == _messages.length) {
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: _messages.length + (_isSending ? 1 : 0),
+                itemBuilder: (context, index) {
+                  // Typing indicator as the trailing item while waiting.
+                  if (_isSending && index == _messages.length) {
+                    return _buildBubble(
+                      context,
+                      isUser: false,
+                      child: SizedBox(
+                        width: 40,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '...',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final message = _messages[index];
                   return _buildBubble(
                     context,
-                    isUser: false,
-                    child: SizedBox(
-                      width: 40,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '...',
-                            style: TextStyle(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                    isUser: message.isUser,
+                    child: Text(
+                      message.content,
+                      style: TextStyle(
+                        color: message.isUser
+                            ? colorScheme.onPrimary
+                            : colorScheme.onSurface,
+                        fontSize: 14,
                       ),
                     ),
                   );
-                }
-
-                final message = _messages[index];
-                return _buildBubble(
-                  context,
-                  isUser: message.isUser,
-                  child: Text(
-                    message.content,
-                    style: TextStyle(
-                      color: message.isUser
-                          ? colorScheme.onPrimary
-                          : colorScheme.onSurface,
-                      fontSize: 14,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Message input
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? colorScheme.surfaceContainerHigh
-                  : colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-                  width: 0.5,
-                ),
+                },
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Ask about GroupApp...',
-                      hintStyle:
-                          TextStyle(color: colorScheme.onSurfaceVariant),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: isDark
-                          ? colorScheme.surfaceContainerHigh
-                          : colorScheme.surfaceContainerLow,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                    ),
-                    style: TextStyle(color: colorScheme.onSurface),
-                    maxLines: null,
-                    textCapitalization: TextCapitalization.sentences,
-                    enabled: !_isSending,
-                    onSubmitted: (_) => _sendMessage(),
+
+            // Message input
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? colorScheme.surfaceContainerHigh
+                    : colorScheme.surface,
+                border: Border(
+                  top: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    width: 0.5,
                   ),
                 ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: colorScheme.primary,
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.send,
-                      color: colorScheme.onPrimary,
-                      size: 20,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Ask about GroupApp...',
+                        hintStyle: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? colorScheme.surfaceContainerHigh
+                            : colorScheme.surfaceContainerLow,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                      ),
+                      style: TextStyle(color: colorScheme.onSurface),
+                      maxLines: null,
+                      textCapitalization: TextCapitalization.sentences,
+                      enabled: !_isSending,
+                      onSubmitted: (_) => _sendMessage(),
                     ),
-                    onPressed: _isSending ? null : _sendMessage,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    backgroundColor: colorScheme.primary,
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.send,
+                        color: colorScheme.onPrimary,
+                        size: 20,
+                      ),
+                      onPressed: _isSending ? null : _sendMessage,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -240,8 +238,8 @@ class _SupportChatPageState extends State<SupportChatPage> {
           color: isUser
               ? colorScheme.primary
               : (isDark
-                  ? colorScheme.surfaceContainerHigh
-                  : colorScheme.surface),
+                    ? colorScheme.surfaceContainerHigh
+                    : colorScheme.surface),
           borderRadius: BorderRadius.circular(12),
         ),
         child: child,

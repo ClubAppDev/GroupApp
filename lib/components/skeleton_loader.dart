@@ -53,34 +53,34 @@ class _SkeletonBoxState extends State<SkeletonBox>
     return Container(
       margin: widget.margin,
       child: RepaintBoundary(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(widget.radius),
-        child: SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              // Slide the gradient's alignment from off-left to off-right.
-              // Using shifting alignment (not a matrix transform) avoids the
-              // hard-edge flashing the ShaderMask approach produced.
-              final t = _controller.value; // 0..1
-              final begin = Alignment(-1.0 - 2.0 * (1 - t), 0);
-              final end = Alignment(1.0 + 2.0 * t, 0);
-              return DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: begin,
-                    end: end,
-                    colors: [base, highlight, base],
-                    stops: const [0.25, 0.5, 0.75],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(widget.radius),
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                // Slide the gradient's alignment from off-left to off-right.
+                // Using shifting alignment (not a matrix transform) avoids the
+                // hard-edge flashing the ShaderMask approach produced.
+                final t = _controller.value; // 0..1
+                final begin = Alignment(-1.0 - 2.0 * (1 - t), 0);
+                final end = Alignment(1.0 + 2.0 * t, 0);
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: begin,
+                      end: end,
+                      colors: [base, highlight, base],
+                      stops: const [0.25, 0.5, 0.75],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -141,9 +141,7 @@ class SkeletonScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Colors.transparent,
-      body: NeonBackground(
-        child: SafeArea(child: SkeletonList(rows: 8)),
-      ),
+      body: NeonBackground(child: SafeArea(child: SkeletonList(rows: 8))),
     );
   }
 }
